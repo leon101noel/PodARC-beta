@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retention Settings - CCTV Alert Monitor</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="user-management-styles.css">
+    <style>
+        .retention-container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            padding: 20px;
+            width: 100%;
+        }
+
+        .retention-description {
+            margin-bottom: 20px;
+            color: #555;
+        }
+
+        .retention-form {
+            margin-bottom: 30px;
+        }
+
+        .retention-stats {
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+
+        .stats-title {
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #7f8c8d;
+        }
+
+        .locked-preview {
+            margin-top: 30px;
+        }
+
+        .locked-events-table {
+            width: 100%;
+            margin-top: 15px;
+        }
+
+        .cleanup-log {
+            margin-top: 30px;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .cleanup-log-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .cleanup-log-entry {
+            padding: 10px;
+            border-left: 4px solid #3498db;
+            background-color: white;
+            margin-bottom: 10px;
+            border-radius: 0 4px 4px 0;
+        }
+
+        .log-timestamp {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-bottom: 5px;
+        }
+
+        .log-message {
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+
+        .log-success {
+            border-left-color: #2ecc71;
+        }
+
+        .log-error {
+            border-left-color: #e74c3c;
+        }
+
+        .cleanup-result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .success-result {
+            background-color: #d5f5e3;
+            border-left: 4px solid #2ecc71;
+        }
+
+        .error-result {
+            background-color: #fadbd8;
+            border-left: 4px solid #e74c3c;
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <h1>Retention Settings</h1>
+                <a href="/" class="back-link">Back to Monitoring</a>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link">Monitoring</a>
+                <a href="/statistics.html" class="nav-link">Statistics</a>
+                <a href="/settings" class="nav-link">Tags</a>
+                <a href="/sites.html" class="nav-link">Sites</a>
+                <a href="/users" class="nav-link">Users</a>
+                <a href="/retention.html" class="nav-link active">Retention</a>
+            </div>
+            <div class="user-info">
+                <span id="current-user"></span>
+                <button id="logout-btn" class="logout-button">Logout</button>
+            </div>
+        </header>
+
+        <main>
+            <div class="retention-container">
+                <div class="section-header">
+                    <h2>Event Retention</h2>
+                </div>
+
+                <div class="retention-description">
+                    <p>Configure how long events are kept before automatic deletion. Events marked as "locked" will not be deleted regardless of age.</p>
+                </div>
+
+                <div id="notification" class="notification"></div>
+
+                <div class="retention-form">
+                    <form id="retention-form">
+                        <div class="form-group">
+                            <label for="retention-days">Retention Period (Days)</label>
+                            <input type="number" id="retention-days" min="1" required>
+                            <div class="help-text">Events older than this many days will be automatically deleted unless locked.</div>
+                        </div>
+                        <div class="form-buttons">
+                            <button type="submit" class="primary-button">Save Settings</button>
+                        </div>
+                    </form>
+
+                    <div class="retention-actions" style="margin-top: 20px;">
+                        <button id="run-cleanup-btn" class="danger-button">Run Cleanup Now</button>
+                        <span class="help-text">This will delete all events older than the retention period that are not locked.</span>
+                    </div>
+                </div>
+
+                <div class="retention-stats">
+                    <h3 class="stats-title">Retention Statistics</h3>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value" id="total-events">--</div>
+                            <div class="stat-label">Total Events</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="old-events">--</div>
+                            <div class="stat-label">Events Older Than Retention Period</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="locked-events">--</div>
+                            <div class="stat-label">Locked Events</div>
+                        </div>
+                    </div>
+
+                    <div class="locked-preview">
+                        <h3>Locked Events</h3>
+                        <table class="locked-events-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Subject</th>
+                                    <th>Camera</th>
+                                    <th>Age (Days)</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="locked-events-table-body">
+                                <tr>
+                                    <td colspan="5" class="loading-text">Loading locked events...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="cleanup-result" class="cleanup-result" style="display: none;">
+                    <!-- Will be populated with cleanup results -->
+                </div>
+
+                <div class="cleanup-log">
+                    <div class="cleanup-log-title">
+                        <h3>Cleanup Log</h3>
+                        <button id="clear-log-btn" class="secondary-button">Clear Log</button>
+                    </div>
+                    <div id="cleanup-log-entries">
+                        <div class="log-empty">No cleanup operations have been performed yet.</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Argus - v0.5.2 beta</p>
+        </footer>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content confirm-modal-content">
+            <div class="modal-header">
+                <h2>Confirm Cleanup</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <p>Are you sure you want to run the cleanup process? This will permanently delete all events older than <span id="confirm-days">7</span> days that are not locked.</p>
+            <div class="form-buttons">
+                <button id="confirm-cancel" class="secondary-button">Cancel</button>
+                <button id="confirm-cleanup" class="danger-button">Run Cleanup</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if the user is logged in
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/login';
+                return;
+            }
+
+            // Display current user
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const currentUserElement = document.getElementById('current-user');
+            if (user && user.name) {
+                currentUserElement.textContent = `${user.name} (${user.role})`;
+            }
+
+            // Check if user is admin
+            if (user.role !== 'admin') {
+                // Redirect non-admin users
+                window.location.href = '/';
+                return;
+            }
+
+            // Elements
+            const retentionForm = document.getElementById('retention-form');
+            const retentionDaysInput = document.getElementById('retention-days');
+            const runCleanupBtn = document.getElementById('run-cleanup-btn');
+            const totalEventsElement = document.getElementById('total-events');
+            const oldEventsElement = document.getElementById('old-events');
+            const lockedEventsElement = document.getElementById('locked-events');
+            const lockedEventsTableBody = document.getElementById('locked-events-table-body');
+            const notificationElement = document.getElementById('notification');
+            const cleanupResultElement = document.getElementById('cleanup-result');
+            const cleanupLogEntries = document.getElementById('cleanup-log-entries');
+            const clearLogBtn = document.getElementById('clear-log-btn');
+            const logoutBtn = document.getElementById('logout-btn');
+            const confirmModal = document.getElementById('confirm-modal');
+            const confirmDays = document.getElementById('confirm-days');
+            const confirmCancel = document.getElementById('confirm-cancel');
+            const confirmCleanup = document.getElementById('confirm-cleanup');
+            const closeModalButtons = document.querySelectorAll('.close-modal');
+
+            // Variables
+            let retentionDays = 7; // Default
+            let events = [];
+
+            // Initialize
+            fetchRetentionConfig();
+            fetchEvents();
+
+            // Event listeners
+            retentionForm.addEventListener('submit', saveRetentionConfig);
+            runCleanupBtn.addEventListener('click', showCleanupConfirmation);
+            clearLogBtn.addEventListener('click', clearCleanupLog);
+            logoutBtn.addEventListener('click', logout);
+            confirmCancel.addEventListener('click', closeConfirmModal);
+            confirmCleanup.addEventListener('click', runCleanup);
+            closeModalButtons.forEach(btn => btn.addEventListener('click', closeAllModals));
+
+            // Fetch retention configuration
+            async function fetchRetentionConfig() {
+                try {
+                    const response = await fetch('/api/retention/config', {
+                        headers: {
+                            'x-auth-token': token
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch retention configuration');
+                    }
+
+                    const data = await response.json();
+                    retentionDays = data.retentionDays || 7;
+                    retentionDaysInput.value = retentionDays;
+                } catch (error) {
+                    console.error('Error fetching retention config:', error);
+                    showNotification('Error loading retention settings: ' + error.message, true);
+                }
+            }
+
+            // Fetch events for statistics
+            async function fetchEvents() {
+                try {
+                    const response = await fetch('/api/events', {
+                        headers: {
+                            'x-auth-token': token
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch events');
+                    }
+
+                    events = await response.json();
+                    updateRetentionStats();
+                    updateLockedEventsTable();
+                } catch (error) {
+                    console.error('Error fetching events:', error);
+                    showNotification('Error loading events: ' + error.message, true);
+                }
+            }
+
+            // Update retention statistics
+            function updateRetentionStats() {
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+
+                const totalEvents = events.length;
+                const oldEvents = events.filter(event => new Date(event.date) < cutoffDate).length;
+                const lockedEvents = events.filter(event => event.locked).length;
+
+                totalEventsElement.textContent = totalEvents;
+                oldEventsElement.textContent = oldEvents;
+                lockedEventsElement.textContent = lockedEvents;
+            }
+
+            // Update locked events table
+            function updateLockedEventsTable() {
+                const lockedEvents = events.filter(event => event.locked);
+
+                if (lockedEvents.length === 0) {
+                    lockedEventsTableBody.innerHTML = '<tr><td colspan="5" class="loading-text">No locked events found</td></tr>';
+                    return;
+                }
+
+                const now = new Date();
+
+                // Sort by date (newest first)
+                lockedEvents.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                let tableHtml = '';
+                lockedEvents.forEach(event => {
+                    const eventDate = new Date(event.date);
+                    const ageDays = Math.floor((now - eventDate) / (1000 * 60 * 60 * 24));
+
+                    tableHtml += `
+                        <tr>
+                            <td>${eventDate.toLocaleString()}</td>
+                            <td>${event.subject}</td>
+                            <td>${event.camera || 'Unknown'}</td>
+                            <td>${ageDays}</td>
+                            <td>
+                                <button class="unlock-btn-small" data-id="${event.id}">Unlock</button>
+                                <button class="view-event-btn" data-id="${event.id}">View</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                lockedEventsTableBody.innerHTML = tableHtml;
+
+                // Add event listeners to buttons
+                document.querySelectorAll('.unlock-btn-small').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const eventId = parseInt(this.getAttribute('data-id'));
+                        unlockEvent(eventId);
+                    });
+                });
+
+                document.querySelectorAll('.view-event-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const eventId = parseInt(this.getAttribute('data-id'));
+                        window.location.href = `/?event=${eventId}`;
+                    });
+                });
+            }
+
+            // Save retention configuration
+            async function saveRetentionConfig(e) {
+                e.preventDefault();
+
+                const newRetentionDays = parseInt(retentionDaysInput.value);
+
+                if (!newRetentionDays || newRetentionDays < 1) {
+                    showNotification('Please enter a valid retention period (minimum 1 day)', true);
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/retention/config', {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-auth-token': token
+                        },
+                        body: JSON.stringify({ retentionDays: newRetentionDays })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to save retention configuration');
+                    }
+
+                    const result = await response.json();
+                    retentionDays = newRetentionDays;
+                    updateRetentionStats();
+                    showNotification('Retention settings saved successfully');
+                } catch (error) {
+                    console.error('Error saving retention config:', error);
+                    showNotification('Error saving settings: ' + error.message, true);
+                }
+            }
+
+            // Show cleanup confirmation modal
+            function showCleanupConfirmation() {
+                confirmDays.textContent = retentionDays;
+                confirmModal.style.display = 'block';
+            }
+
+            // Close confirm modal
+            function closeConfirmModal() {
+                confirmModal.style.display = 'none';
+            }
+
+            // Close all modals
+            function closeAllModals() {
+                confirmModal.style.display = 'none';
+            }
+
+            // Run cleanup process
+            async function runCleanup() {
+                closeConfirmModal();
+                showNotification('Running cleanup process... This may take a moment.');
+
+                try {
+                    const response = await fetch('/api/retention/cleanup', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-auth-token': token
+                        },
+                        body: JSON.stringify({ retentionDays })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to run cleanup process');
+                    }
+
+                    const result = await response.json();
+                    console.log('Cleanup result:', result);
+
+                    // Show success message with stats
+                    const stats = result.stats;
+                    cleanupResultElement.innerHTML = `
+                        <h3>Cleanup Completed Successfully</h3>
+                        <p>Deleted ${stats.deletedEvents} events older than ${retentionDays} days.</p>
+                        <p>Deleted ${stats.deletedImages} image files and ${stats.deletedVideos} video files.</p>
+                        <p>Preserved ${stats.skippedLockedEvents} locked events.</p>
+                    `;
+                    cleanupResultElement.className = 'cleanup-result success-result';
+                    cleanupResultElement.style.display = 'block';
+
+                    // Add to log
+                    addLogEntry({
+                        timestamp: new Date(),
+                        success: true,
+                        message: `Cleanup completed: Deleted ${stats.deletedEvents} events, ${stats.deletedImages} images, ${stats.deletedVideos} videos. Preserved ${stats.skippedLockedEvents} locked events.`
+                    });
+
+                    // Refresh events to update stats
+                    fetchEvents();
+
+                    showNotification('Cleanup process completed successfully');
+                } catch (error) {
+                    console.error('Error during cleanup:', error);
+
+                    // Show error message
+                    cleanupResultElement.innerHTML = `
+                        <h3>Cleanup Failed</h3>
+                        <p>Error: ${error.message}</p>
+                    `;
+                    cleanupResultElement.className = 'cleanup-result error-result';
+                    cleanupResultElement.style.display = 'block';
+
+                    // Add to log
+                    addLogEntry({
+                        timestamp: new Date(),
+                        success: false,
+                        message: `Cleanup failed: ${error.message}`
+                    });
+
+                    showNotification('Error during cleanup: ' + error.message, true);
+                }
+            }
+
+            // Unlock an event
+            async function unlockEvent(eventId) {
+                try {
+                    const response = await fetch(`/api/retention/events/${eventId}/lock`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-auth-token': token
+                        },
+                        body: JSON.stringify({ locked: false })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to unlock event');
+                    }
+
+                    // Update local events
+                    const eventIndex = events.findIndex(e => e.id === eventId);
+                    if (eventIndex !== -1) {
+                        events[eventIndex].locked = false;
+                    }
+
+                    // Update UI
+                    updateRetentionStats();
+                    updateLockedEventsTable();
+
+                    showNotification('Event unlocked successfully');
+                } catch (error) {
+                    console.error('Error unlocking event:', error);
+                    showNotification('Error unlocking event: ' + error.message, true);
+                }
+            }
+
+            // Add entry to cleanup log
+            function addLogEntry(entry) {
+                // Remove "log-empty" message if present
+                const emptyLog = cleanupLogEntries.querySelector('.log-empty');
+                if (emptyLog) {
+                    emptyLog.remove();
+                }
+
+                const logEntryElement = document.createElement('div');
+                logEntryElement.className = `cleanup-log-entry ${entry.success ? 'log-success' : 'log-error'}`;
+
+                logEntryElement.innerHTML = `
+                    <div class="log-timestamp">${entry.timestamp.toLocaleString()}</div>
+                    <div class="log-message">${entry.message}</div>
+                `;
+
+                cleanupLogEntries.prepend(logEntryElement);
+
+                // Store in local storage for persistence
+                const logEntries = getLogEntries();
+                logEntries.unshift(entry);
+                saveLogEntries(logEntries);
+            }
+
+            // Get log entries from local storage
+            function getLogEntries() {
+                try {
+                    const logEntriesJson = localStorage.getItem('cleanupLogEntries');
+                    return logEntriesJson ? JSON.parse(logEntriesJson) : [];
+                } catch (error) {
+                    console.error('Error reading log entries:', error);
+                    return [];
+                }
+            }
+
+            // Save log entries to local storage
+            function saveLogEntries(entries) {
+                try {
+                    // Limit to last 50 entries
+                    const limitedEntries = entries.slice(0, 50);
+                    localStorage.setItem('cleanupLogEntries', JSON.stringify(limitedEntries));
+                } catch (error) {
+                    console.error('Error saving log entries:', error);
+                }
+            }
+
+            // Load log entries from local storage
+            function loadLogEntries() {
+                const entries = getLogEntries();
+
+                if (entries.length === 0) {
+                    cleanupLogEntries.innerHTML = '<div class="log-empty">No cleanup operations have been performed yet.</div>';
+                    return;
+                }
+
+                cleanupLogEntries.innerHTML = '';
+
+                entries.forEach(entry => {
+                    const logEntryElement = document.createElement('div');
+                    logEntryElement.className = `cleanup-log-entry ${entry.success ? 'log-success' : 'log-error'}`;
+
+                    // Convert timestamp string back to Date object for display
+                    const timestamp = typeof entry.timestamp === 'string'
+                        ? new Date(entry.timestamp)
+                        : entry.timestamp;
+
+                    logEntryElement.innerHTML = `
+                        <div class="log-timestamp">${timestamp.toLocaleString()}</div>
+                        <div class="log-message">${entry.message}</div>
+                    `;
+
+                    cleanupLogEntries.appendChild(logEntryElement);
+                });
+            }
+
+            // Clear cleanup log
+            function clearCleanupLog() {
+                cleanupLogEntries.innerHTML = '<div class="log-empty">No cleanup operations have been performed yet.</div>';
+                localStorage.removeItem('cleanupLogEntries');
+            }
+
+            // Show notification
+            function showNotification(message, isError = false) {
+                notificationElement.textContent = message;
+                notificationElement.className = 'notification';
+
+                if (isError) {
+                    notificationElement.classList.add('notification-error');
+                } else {
+                    notificationElement.classList.add('notification-success');
+                }
+
+                notificationElement.style.display = 'block';
+
+                // Hide after 5 seconds
+                setTimeout(() => {
+                    notificationElement.style.display = 'none';
+                }, 5000);
+            }
+
+            // Logout function
+            async function logout() {
+                try {
+                    await fetch('/api/auth/logout', {
+                        method: 'POST',
+                        headers: {
+                            'x-auth-token': token
+                        }
+                    });
+
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    window.location.href = '/login';
+                } catch (error) {
+                    console.error('Logout error:', error);
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    window.location.href = '/login';
+                }
+            }
+
+            // Load saved log entries on page load
+            loadLogEntries();
+        });
+    </script>
+</body>
+</html>

@@ -27,6 +27,10 @@
     const closeModalButtons = document.querySelectorAll('.close-modal');
     const adminLinks = document.getElementById('admin-links');
 
+    // New elements for event locking
+    const ackLockEvent = document.getElementById('ack-lock-event');
+    const eventLockContainer = document.getElementById('event-lock-container');
+
     // State
     let events = [];
     let selectedEventId = null;
@@ -56,7 +60,16 @@
             <a href="/users" class="nav-link">Users</a>
             <a href="/settings" class="nav-link">Settings</a>
             <a href="/sites.html" class="nav-link">Sites</a>
+            <a href="/retention.html" class="nav-link">Retention</a>
         `;
+    }
+
+    // Check if there's an event ID in the URL (for direct linking)
+    const urlParams = new URLSearchParams(window.location.search);
+    const eventIdParam = urlParams.get('event');
+    if (eventIdParam) {
+        console.log('Found event ID in URL:', eventIdParam);
+        // We'll select this event after loading
     }
 
     // Fetch events from the server
@@ -92,6 +105,19 @@
                 const event = events.find(e => e.id === selectedEventId);
                 if (event) {
                     selectEvent(selectedEventId);
+                }
+            }
+            // If there's an event ID in the URL, select it
+            else if (eventIdParam) {
+                const eventId = parseInt(eventIdParam);
+                const event = events.find(e => e.id === eventId);
+                if (event) {
+                    selectEvent(eventId);
+                    // Scroll to the selected event in the list
+                    const eventElement = document.querySelector(`.event-item[data-id="${eventId}"]`);
+                    if (eventElement) {
+                        eventElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
                 }
             }
         } catch (error) {
@@ -226,10 +252,16 @@
             const isActive = selectedEventId === event.id ? 'active' : '';
             const isAcknowledged = event.acknowledged ? '' : 'unacknowledged';
             const isLateResponse = event.isLateResponse ? 'late-response' : '';
+            const isLocked = event.locked ? 'locked-event' : '';
 
             // Add check icon for acknowledged events
             const acknowledgedIcon = event.acknowledged
                 ? '<span class="acknowledged-icon">✓</span>'
+                : '';
+
+            // Add lock icon for locked events
+            const lockedIcon = event.locked
+                ? '<span class="locked-icon">🔒</span>'
                 : '';
 
             // Add response time info if the event has been acknowledged
@@ -256,10 +288,13 @@
             }
 
             return `
-            <div class="event-item ${isActive} ${isAcknowledged} ${isLateResponse}" data-id="${event.id}">
+            <div class="event-item ${isActive} ${isAcknowledged} ${isLateResponse} ${isLocked}" data-id="${event.id}">
                 <div class="event-header">
                     <div class="event-subject">${event.subject}</div>
-                    ${acknowledgedIcon}
+                    <div class="event-icons">
+                        ${acknowledgedIcon}
+                        ${lockedIcon}
+                    </div>
                 </div>
                 <div class="event-details">
                     ${event.camera ? `<div>Camera: ${event.camera}</div>` : ''}
@@ -320,6 +355,11 @@
                 videoContainer.innerHTML = '';
             }
 
+            // Clear lock container
+            if (eventLockContainer) {
+                eventLockContainer.innerHTML = '';
+            }
+
             return;
         }
 
@@ -331,9 +371,9 @@
         // Update image info
         const date = new Date(event.date);
         let infoHTML = `
-    <p><strong>${event.subject}</strong></p>
-    <p>Captured: ${date.toLocaleString()}</p>
-`;
+            <p><strong>${event.subject}</strong></p>
+            <p>Captured: ${date.toLocaleString()}</p>
+        `;
 
         if (event.camera) infoHTML += `<p>Camera: ${event.camera}</p>`;
         if (event.eventType) infoHTML += `<p>Event Type: ${event.eventType}</p>`;
@@ -349,15 +389,15 @@
         // Add site information container if siteId exists
         if (event.siteId) {
             infoHTML += `<div id="site-info-container" class="site-info-container">
-            <div class="site-info-loading">Loading site information...</div>
-        </div>`;
+                <div class="site-info-loading">Loading site information...</div>
+            </div>`;
         }
 
         // Add acknowledgment info if event has been acknowledged
         if (event.acknowledged && event.acknowledgedAt) {
             const ackDate = new Date(event.acknowledgedAt);
             infoHTML += `<div class="response-info">
-            <p>Acknowledged: ${ackDate.toLocaleString()}`;
+                <p>Acknowledged: ${ackDate.toLocaleString()}`;
 
             if (event.acknowledgedBy) {
                 infoHTML += ` by <strong>${event.acknowledgedBy.name}</strong>`;
@@ -379,9 +419,9 @@
             // Add note if it exists
             if (event.note) {
                 infoHTML += `<div class="event-note">
-                <p><strong>Note:</strong></p>
-                <p>${event.note}</p>
-            </div>`;
+                    <p><strong>Note:</strong></p>
+                    <p>${event.note}</p>
+                </div>`;
             }
 
             infoHTML += '</div>';
@@ -389,6 +429,9 @@
 
         console.log('Setting image info HTML');
         imageInfo.innerHTML = infoHTML;
+
+        // Update lock button display
+        updateEventLockDisplay(event);
 
         // Fetch site information if siteId exists
         if (event.siteId) {
@@ -400,8 +443,8 @@
         if (!event.acknowledged) {
             console.log('Event not acknowledged, showing acknowledge button');
             acknowledgeContainer.innerHTML = `
-            <button id="acknowledge-btn" class="acknowledge-btn">Acknowledge Event</button>
-        `;
+                <button id="acknowledge-btn" class="acknowledge-btn">Acknowledge Event</button>
+            `;
 
             // Add event listener to acknowledge button
             document.getElementById('acknowledge-btn').addEventListener('click', () => {
@@ -514,8 +557,8 @@
     }
 
     // Process the acknowledge form submission
-    async function processAcknowledgement(eventId, note, tags) {
-        console.log('Acknowledging event:', eventId, 'Note:', note, 'Tags:', tags);
+    async function processAcknowledgement(eventId, note, tags, locked) {
+        console.log('Acknowledging event:', eventId, 'Note:', note, 'Tags:', tags, 'Locked:', locked);
         try {
             const response = await fetch(`/api/events/${eventId}/acknowledge`, {
                 method: 'POST',
@@ -523,7 +566,7 @@
                     'Content-Type': 'application/json',
                     'x-auth-token': token
                 },
-                body: JSON.stringify({ note, tags })
+                body: JSON.stringify({ note, tags, locked })
             });
 
             console.log('Acknowledge response status:', response.status);
@@ -852,6 +895,14 @@
         acknowledgeError.textContent = '';
         ackEventId.value = eventId;
 
+        // Reset lock checkbox - find the current event to set initial state
+        const event = events.find(e => e.id === eventId);
+        if (event) {
+            ackLockEvent.checked = event.locked || false;
+        } else {
+            ackLockEvent.checked = false;
+        }
+
         // Clear selected tags
         const existingTags = tagContainer.querySelectorAll('.tag-option');
         existingTags.forEach(tag => {
@@ -892,6 +943,106 @@
     // Close acknowledge modal
     function closeAcknowledgeModal() {
         acknowledgeModal.style.display = 'none';
+    }
+
+    /**
+     * Update the lock/unlock button display based on event state
+     * @param {Object} event - The event object
+     */
+    function updateEventLockDisplay(event) {
+        if (!event || !eventLockContainer) return;
+
+        if (event.locked) {
+            // Event is locked - show unlock button and indicator
+            eventLockContainer.innerHTML = `
+                <div class="locked-indicator">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    This event is locked and will not be automatically deleted
+                </div>
+                <button id="unlock-event-btn" class="unlock-btn" data-id="${event.id}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+                    </svg>
+                    Unlock Event
+                </button>
+            `;
+
+            // Add event listener to unlock button
+            document.getElementById('unlock-event-btn').addEventListener('click', function () {
+                const eventId = parseInt(this.getAttribute('data-id'));
+                toggleEventLock(eventId, false);
+            });
+        } else {
+            // Event is not locked - show lock button
+            eventLockContainer.innerHTML = `
+                <button id="lock-event-btn" class="lock-btn" data-id="${event.id}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    Lock Event (Prevent Deletion)
+                </button>
+            `;
+
+            // Add event listener to lock button
+            document.getElementById('lock-event-btn').addEventListener('click', function () {
+                const eventId = parseInt(this.getAttribute('data-id'));
+                toggleEventLock(eventId, true);
+            });
+        }
+    }
+
+    /**
+     * Toggle the lock status of an event
+     * @param {number} eventId - The ID of the event to lock/unlock
+     * @param {boolean} locked - The new lock status
+     */
+    async function toggleEventLock(eventId, locked) {
+        try {
+            console.log(`${locked ? 'Locking' : 'Unlocking'} event:`, eventId);
+
+            const response = await fetch(`/api/retention/events/${eventId}/lock`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-auth-token': token
+                },
+                body: JSON.stringify({ locked })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Failed to ${locked ? 'lock' : 'unlock'} event`);
+            }
+
+            const result = await response.json();
+            console.log('Lock toggle result:', result);
+
+            // Update the local event data
+            const eventIndex = events.findIndex(e => e.id === eventId);
+            if (eventIndex !== -1) {
+                events[eventIndex].locked = locked;
+            }
+
+            // Update UI
+            if (selectedEventId === eventId) {
+                updateEventLockDisplay(events[eventIndex]);
+            }
+
+            // Refresh the events list to update any visual indicators
+            renderEventsList();
+
+            // Show notification
+            showNotification(`Event ${locked ? 'locked' : 'unlocked'} successfully`, 'success');
+
+        } catch (error) {
+            console.error(`Error ${locked ? 'locking' : 'unlocking'} event:`, error);
+            showNotification(`Failed to ${locked ? 'lock' : 'unlock'} event: ${error.message}`, 'error');
+        }
     }
 
     // This function will be called when displaying event details
@@ -1271,6 +1422,7 @@
             <div class="user-actions">
                 ${user.role === 'admin' ? '<a href="/users" class="admin-link">User Management</a>' : ''}
                 ${user.role === 'admin' ? '<a href="/settings" class="admin-link">Settings</a>' : ''}
+                ${user.role === 'admin' ? '<a href="/retention.html" class="admin-link">Retention</a>' : ''}
                 <button id="logout-btn" class="logout-btn">Logout</button>
             </div>
         `;
@@ -1362,6 +1514,18 @@
             }
         }
 
+        // 'L' key to lock/unlock the currently selected event
+        if (e.key === 'l' || e.key === 'L') {
+            // Check if there's a selected event
+            if (selectedEventId) {
+                const event = events.find(e => e.id === selectedEventId);
+                if (event) {
+                    // Toggle the lock status
+                    toggleEventLock(selectedEventId, !event.locked);
+                }
+            }
+        }
+
         // 'R' key to refresh events (same as clicking the refresh button)
         if (e.key === 'r' || e.key === 'R') {
             if (!refreshBtn.disabled) {
@@ -1372,12 +1536,6 @@
         // 'F' key to toggle unacknowledged filter
         if (e.key === 'f' || e.key === 'F') {
             filterUnacknowledged.checked = !filterUnacknowledged.checked;
-            renderEventsList();
-        }
-
-        // 'L' key to toggle late response filter
-        if (e.key === 'l' || e.key === 'L') {
-            filterLateResponse.checked = !filterLateResponse.checked;
             renderEventsList();
         }
 
@@ -1396,6 +1554,7 @@
 
         const eventId = parseInt(ackEventId.value);
         const note = ackNote.value.trim();
+        const locked = ackLockEvent.checked;
 
         // Get selected tags
         const selectedTags = [];
@@ -1403,7 +1562,7 @@
             selectedTags.push(tagElement.getAttribute('data-tag'));
         });
 
-        processAcknowledgement(eventId, note, selectedTags);
+        processAcknowledgement(eventId, note, selectedTags, locked);
     });
 
     // Handle modal close buttons

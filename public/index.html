@@ -188,6 +188,75 @@
                 width: 100%;
             }
         }
+
+        /* Event locking styles */
+        .lock-event-label {
+            display: flex;
+            align-items: flex-start;
+            cursor: pointer;
+        }
+
+            .lock-event-label input[type="checkbox"] {
+                margin-right: 10px;
+                margin-top: 3px;
+            }
+
+        .help-text {
+            display: block;
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+
+        .event-lock-container {
+            margin-top: 10px;
+        }
+
+        .lock-btn, .unlock-btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .lock-btn {
+            background-color: #3498db;
+            color: white;
+            border: none;
+        }
+
+            .lock-btn:hover {
+                background-color: #2980b9;
+            }
+
+        .unlock-btn {
+            background-color: #e67e22;
+            color: white;
+            border: none;
+        }
+
+            .unlock-btn:hover {
+                background-color: #d35400;
+            }
+
+            .lock-btn svg, .unlock-btn svg {
+                margin-right: 6px;
+            }
+
+        .locked-indicator {
+            display: flex;
+            align-items: center;
+            color: #e67e22;
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+
+            .locked-indicator svg {
+                margin-right: 6px;
+            }
     </style>
 </head>
 <body>
@@ -241,6 +310,9 @@
                     <div id="image-info" class="image-info">
                         <p>Select an event to view image</p>
                     </div>
+                    <div id="event-lock-container" class="event-lock-container">
+                        <!-- Lock/unlock button will be added here dynamically -->
+                    </div>
                     <div id="event-video-container" class="event-video-container">
                         <!-- Video content will be dynamically added here -->
                     </div>
@@ -271,7 +343,7 @@
 
     <!-- Sound notification (hidden) -->
     <audio id="notification-sound" preload="auto">
-        <source src="https://assets.mixkit.co/active_storage/sfx/3005/3005.wav" type="audio/wav">
+        <source src="notification.wav" type="audio/wav">
         <!-- Fallback sound if the first one doesn't load -->
         <source src="https://assets.mixkit.co/active_storage/sfx/922/922.wav" type="audio/wav">
     </audio>
@@ -296,6 +368,13 @@
                         <!-- Tags will be populated dynamically -->
                         <div class="loading-tags">Loading tags...</div>
                     </div>
+                </div>
+                <div class="form-group">
+                    <label class="lock-event-label">
+                        <input type="checkbox" id="ack-lock-event">
+                        Lock this event (prevent automatic deletion)
+                        <span class="help-text">Locked events will not be deleted during automatic cleanup of old events.</span>
+                    </label>
                 </div>
                 <div class="form-buttons">
                     <button type="button" id="ack-cancel-btn" class="secondary-button">Cancel</button>
@@ -332,6 +411,32 @@
                     </a>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Retention Settings Modal -->
+    <div id="retention-settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Event Retention Settings</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div id="retention-settings-error" class="error-message"></div>
+            <form id="retention-settings-form">
+                <div class="form-group">
+                    <label for="retention-days">Retention Period (Days)</label>
+                    <input type="number" id="retention-days" min="1" required>
+                    <div class="help-text">Events older than this many days will be automatically deleted unless locked.</div>
+                </div>
+                <div class="retention-stats-container" id="retention-stats-container">
+                    <!-- Will show retention statistics -->
+                </div>
+                <div class="form-buttons">
+                    <button type="button" id="retention-run-cleanup-btn" class="danger-button">Run Cleanup Now</button>
+                    <button type="button" id="retention-cancel-btn" class="secondary-button">Cancel</button>
+                    <button type="submit" class="primary-button">Save Settings</button>
+                </div>
+            </form>
         </div>
     </div>
 

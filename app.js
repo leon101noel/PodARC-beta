@@ -14,6 +14,11 @@ const statsRoutes = require('./routes/stats');
 const { router: sitesRoutes, matchCameraToSite } = require('./routes/sites');
 // Add the SMTP server import
 const { initSmtpServer, processEmail } = require('./smtp-server');
+// Add retention routes and service
+const retentionRoutes = require('./routes/retention');
+const EventRetentionService = require('./event-retention');
+// Add cron for scheduled tasks
+const CronJob = require('cron').CronJob;
 
 const app = express();
 const PORT = process.env.PORT || 3020;
@@ -32,6 +37,7 @@ const config = {
 
     // Application settings
     lateResponseThresholdMinutes: 2, // Threshold for considering a response "late"
+    retentionDays: process.env.RETENTION_DAYS || 7, // Default retention period in days
 };
 
 // Middleware - IMPORTANT: Apply body-parser and cors before auth middleware
@@ -61,6 +67,9 @@ app.use('/api/stats', statsRoutes);
 
 // Add sites routes
 app.use('/api/sites', sitesRoutes);
+
+// Add retention routes
+app.use('/api/retention', retentionRoutes);
 
 // Data file path
 const dataFilePath = path.join(__dirname, 'events-data.json');
@@ -238,6 +247,20 @@ app.get('/settings', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'settings.html'));
 });
 
+// Serve retention settings page (admin only)
+app.get('/retention.html', (req, res) => {
+    // Check if authenticated and is admin
+    if (!req.user) {
+        return res.redirect('/login');
+    }
+
+    if (req.user.role !== 'admin') {
+        return res.redirect('/');
+    }
+
+    res.sendFile(path.join(__dirname, 'public', 'retention.html'));
+});
+
 // Serve the test events page
 app.get('/test-events', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'test-events.html'));
@@ -373,7 +396,7 @@ app.get('/api/videos/list', authMiddleware, (req, res) => {
     }
 });
 
-// Acknowledge an event - updated to include notes and tags
+// Acknowledge an event - updated to include notes, tags, and locked status
 app.post('/api/events/:id/acknowledge', (req, res) => {
     try {
         // Make sure user is authenticated
@@ -382,7 +405,7 @@ app.post('/api/events/:id/acknowledge', (req, res) => {
         }
 
         const eventId = parseInt(req.params.id);
-        const { note, tags } = req.body; // Get note and tags from request body
+        const { note, tags, locked } = req.body; // Get note, tags, and locked from request body
         const events = readEventsData();
 
         const eventIndex = events.findIndex(event => event.id === eventId);
@@ -424,6 +447,11 @@ app.post('/api/events/:id/acknowledge', (req, res) => {
         // Add tags if provided
         if (tags && Array.isArray(tags) && tags.length > 0) {
             events[eventIndex].tags = tags;
+        }
+
+        // Update locked status if provided
+        if (locked !== undefined) {
+            events[eventIndex].locked = locked;
         }
 
         if (isLateResponse) {
@@ -542,7 +570,8 @@ app.post('/api/check-emails', async (req, res) => {
                 camera: 'Test Camera',
                 eventType: 'Test Detection',
                 device: 'Test Device',
-                acknowledged: false
+                acknowledged: false,
+                locked: false // Default to unlocked
             };
 
             // Add to events array
@@ -592,7 +621,8 @@ app.post('/api/test/create-event', (req, res) => {
             camera: 'Test Camera',
             eventType: 'Test Detection',
             device: 'Test Device',
-            acknowledged: false
+            acknowledged: false,
+            locked: false // Default to unlocked
         };
 
         // Add to events array
@@ -620,11 +650,11 @@ app.post('/api/test/create-event', (req, res) => {
 app.post('/api/videos/notify-upload', authMiddleware, (req, res) => {
     try {
         const { path, camera, timestamp } = req.body;
-        
+
         if (!path || !camera) {
             return res.status(400).json({ error: 'Missing required fields: path and camera' });
         }
-        
+
         // Notify all connected SSE clients
         if (sseClients.size > 0) {
             const notification = {
@@ -633,10 +663,10 @@ app.post('/api/videos/notify-upload', authMiddleware, (req, res) => {
                 camera: camera,
                 timestamp: timestamp || new Date().toISOString()
             };
-            
+
             notifyClients(notification);
         }
-        
+
         res.json({ success: true, message: 'Upload notification sent' });
     } catch (error) {
         console.error('Error sending video upload notification:', error);
@@ -657,11 +687,17 @@ app.listen(PORT, () => {
             event.acknowledged = false;
             updated = true;
         }
+
+        // Add locked property if it doesn't exist
+        if (event.locked === undefined) {
+            event.locked = false;
+            updated = true;
+        }
     });
 
     if (updated) {
         writeEventsData(events);
-        console.log('Updated events data with acknowledged property for new events');
+        console.log('Updated events data with acknowledged and locked properties');
     }
 
     // Make sure the videos directory exists
@@ -729,6 +765,7 @@ app.listen(PORT, () => {
                         authenticated: eventData.authenticated,
                         authenticatedUser: eventData.authenticatedUser,
                         acknowledged: false,
+                        locked: false, // Default to unlocked
                         siteId: siteInfo ? siteInfo.id : null
                     };
 
@@ -755,6 +792,29 @@ app.listen(PORT, () => {
     } else {
         console.log('Warning: No email receiving method is enabled. Configure SMTP server settings.');
     }
+
+    // Initialize retention service
+    const retentionService = new EventRetentionService({
+        retentionDays: config.retentionDays,
+        eventsFilePath: path.join(__dirname, 'events-data.json'),
+        imagesBasePath: path.join(__dirname, 'public'),
+        videosBasePath: path.join(__dirname)
+    });
+
+    // Set up scheduled cleanup - run every day at 3 AM
+    const cleanupJob = new CronJob('0 3 * * *', async function () {
+        console.log('Running scheduled event cleanup...');
+        try {
+            const stats = await retentionService.cleanupOldEvents();
+            console.log('Scheduled cleanup completed:', stats);
+        } catch (error) {
+            console.error('Error during scheduled cleanup:', error);
+        }
+    }, null, true);
+
+    // Start the cleanup job
+    cleanupJob.start();
+    console.log('Scheduled event cleanup job initialized (runs daily at 3 AM)');
 
     console.log('Note: External FTP server should be configured separately to upload files to the videos directory');
 });

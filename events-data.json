@@ -18,6 +18,85 @@
     },
     "tags": [
       "Other"
-    ]
+    ],
+    "locked": true
+  },
+  {
+    "id": 1746102044473,
+    "messageId": "test-1746102044473",
+    "date": "2025-05-01T12:20:44.473Z",
+    "subject": "Test Event at 13:20:44",
+    "imagePath": "/images/test.jpg",
+    "camera": "Test Camera",
+    "eventType": "Test Detection",
+    "device": "Test Device",
+    "acknowledged": true,
+    "locked": true,
+    "acknowledgedAt": "2025-05-01T12:21:29.563Z",
+    "responseTimeMinutes": 0,
+    "acknowledgedBy": {
+      "userId": 1,
+      "username": "admin",
+      "name": "Administrator"
+    }
+  },
+  {
+    "id": 1746102215456,
+    "messageId": "test-1746102215456",
+    "date": "2025-04-01T12:23:35.456Z",
+    "subject": "Test Event at 13:23:35",
+    "imagePath": "/images/test.jpg",
+    "camera": "Test Camera",
+    "eventType": "Test Detection",
+    "device": "Test Device",
+    "acknowledged": true,
+    "locked": true,
+    "acknowledgedAt": "2025-05-01T12:26:26.656Z",
+    "responseTimeMinutes": 43202,
+    "acknowledgedBy": {
+      "userId": 1,
+      "username": "admin",
+      "name": "Administrator"
+    },
+    "tags": [
+      "Known Person"
+    ],
+    "isLateResponse": true
+  },
+  {
+    "id": 1746102814015,
+    "messageId": "test-1746102814015",
+    "date": "2025-05-01T12:33:34.015Z",
+    "subject": "Test Event at 13:33:34",
+    "imagePath": "/images/test.jpg",
+    "camera": "Test Camera",
+    "eventType": "Test Detection",
+    "device": "Test Device",
+    "acknowledged": false,
+    "locked": false
+  },
+  {
+    "id": 1746102816310,
+    "messageId": "test-1746102816310",
+    "date": "2025-05-01T12:33:36.310Z",
+    "subject": "Test Event at 13:33:36",
+    "imagePath": "/images/test.jpg",
+    "camera": "Test Camera",
+    "eventType": "Test Detection",
+    "device": "Test Device",
+    "acknowledged": false,
+    "locked": false
+  },
+  {
+    "id": 1746102818095,
+    "messageId": "test-1746102818095",
+    "date": "2025-05-01T12:33:38.095Z",
+    "subject": "Test Event at 13:33:38",
+    "imagePath": "/images/test.jpg",
+    "camera": "Test Camera",
+    "eventType": "Test Detection",
+    "device": "Test Device",
+    "acknowledged": false,
+    "locked": false
   }
 ]
