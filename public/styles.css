@@ -37,6 +37,18 @@ header {
     gap: 15px;
 }
 
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.header-logo {
+    height: 80px;
+    max-width: 250px;
+    object-fit: contain;
+}
+
 .unacknowledged-counter {
     background-color: #e74c3c;
     color: white;
@@ -484,6 +496,14 @@ kbd {
     .header-content {
         width: 100%;
         justify-content: space-between;
+    }
+
+    .logo-container {
+        flex: 1;
+    }
+
+    .header-logo {
+        height: 32px;
     }
 
     .nav-links {
@@ -1047,7 +1067,7 @@ kbd {
             font-size: 0.85rem;
             color: #3e9d18;
             font-weight: 500;
-            margin-top: 2px;            
+            margin-top: 2px;
         }
 
         .site-info-container {
@@ -1149,5 +1169,3 @@ kbd {
         }
     }
 }
-
-

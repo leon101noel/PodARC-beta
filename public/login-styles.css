@@ -32,17 +32,17 @@ body {
     margin-bottom: 30px;
 }
 
-    .login-header h1 {
-        color: #2c3e50;
-        font-size: 1.8rem;
-        margin-bottom: 10px;
-    }
+.login-logo {
+    max-width: 250px;
+    height: auto;
+    margin-bottom: 15px;
+}
 
-    .login-header h2 {
-        color: #7f8c8d;
-        font-size: 1.2rem;
-        font-weight: normal;
-    }
+.login-header h2 {
+    color: #7f8c8d;
+    font-size: 1.2rem;
+    font-weight: normal;
+}
 
 .form-group {
     margin-bottom: 20px;
