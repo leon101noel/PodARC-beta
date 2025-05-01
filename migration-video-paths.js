@@ -1,4 +1,4 @@
-// migration-video-paths.js
+// migration-video-paths.js - FIXED VERSION
 // Run this script to scan through existing events and add video paths
 
 const fs = require('fs');
@@ -50,40 +50,77 @@ async function findMatchingVideo(event) {
 
         // Skip events without a camera name or image path
         if (!event.camera || !event.imagePath) {
+            console.log(`Event ${event.id} has no camera or image path, skipping`);
             return null;
         }
 
         // Extract timestamp from image filename if possible
         // Format: 1745505272552_01_20250424153418000.jpg
         const imageMatch = event.imagePath.match(/\d+_\d+_(\d{14})/);
-        if (!imageMatch) return null;
+        if (!imageMatch) {
+            console.log(`Event ${event.id} has no valid timestamp in image path: ${event.imagePath}`);
+            return null;
+        }
 
         const imageTimestamp = imageMatch[1]; // 20250424153418000
         const dateTimePart = imageTimestamp.substr(0, 14); // 20250424153418
 
-        // Format date parts for comparison
+        // Format date parts for comparison - FIXED PARSING
         const year = dateTimePart.substr(0, 4);
         const month = dateTimePart.substr(4, 2);
         const day = dateTimePart.substr(6, 2);
 
-        // Get event date
+        console.log(`Event ${event.id} timestamp: ${year}-${month}-${day} from image: ${event.imagePath}`);
+
+        // Try parsing date from event.date
         let eventDate;
         try {
             eventDate = new Date(event.date);
+            console.log(`Event ${event.id} date from event.date: ${eventDate.toISOString()}`);
         } catch (e) {
             console.error(`Error parsing event date ${event.date} for event ${event.id}:`, e);
-            return null;
+            // Fall back to using the image timestamp
+            const hour = parseInt(dateTimePart.substr(8, 2));
+            const minute = parseInt(dateTimePart.substr(10, 2));
+            const second = parseInt(dateTimePart.substr(12, 2));
+            eventDate = new Date(
+                parseInt(year),
+                parseInt(month) - 1,
+                parseInt(day),
+                hour,
+                minute,
+                second
+            );
+            console.log(`Using fallback date from image timestamp: ${eventDate.toISOString()}`);
         }
 
         // Define dates to check (exact day, day before, day after)
         const datesToCheck = [
-            { year, month, day }, // Exact date from image
             { // From event date
                 year: eventDate.getFullYear().toString(),
                 month: (eventDate.getMonth() + 1).toString().padStart(2, '0'),
                 day: eventDate.getDate().toString().padStart(2, '0')
             }
         ];
+
+        // Add exact date from image timestamp if different
+        const imageYear = year;
+        const imageMonth = month;
+        const imageDay = day;
+
+        const imageExactDate = {
+            year: imageYear,
+            month: imageMonth,
+            day: imageDay
+        };
+
+        // Check if it's already in the list
+        if (!datesToCheck.some(d =>
+            d.year === imageExactDate.year &&
+            d.month === imageExactDate.month &&
+            d.day === imageExactDate.day)) {
+            datesToCheck.push(imageExactDate);
+        }
 
         // Add day before event date
         const dayBefore = new Date(eventDate);
@@ -126,44 +163,59 @@ async function findMatchingVideo(event) {
             second
         );
         const compareTime = compareDate.getTime();
+        console.log(`Event ${event.id} compare time: ${compareDate.toISOString()}`);
 
         // Track best match
         let bestMatch = null;
         let minTimeDiff = Infinity;
+
+        // Increase time window for better matching
+        const timeWindow = 180 * 1000; // 3 minutes
+
+        console.log(`Checking ${datesToCheck.length} potential dates for event ${event.id}`);
 
         // Check each date directory
         for (const dateToCheck of datesToCheck) {
             const { year, month, day } = dateToCheck;
             const videoDir = path.join(videosBasePath, year, month, day);
 
+            console.log(`Checking directory: ${videoDir}`);
+
             // Skip if directory doesn't exist
             if (!fs.existsSync(videoDir)) {
+                console.log(`Directory doesn't exist: ${videoDir}`);
                 continue;
             }
 
             try {
                 // Get all mp4 files in the directory
                 const files = fs.readdirSync(videoDir);
-                const videoFiles = files.filter(file =>
-                    file.toLowerCase().endsWith('.mp4') &&
-                    file.startsWith(event.camera));
+                const allVideoFiles = files.filter(file => file.toLowerCase().endsWith('.mp4'));
+                const cameraVideoFiles = allVideoFiles.filter(file => file.startsWith(event.camera));
+
+                console.log(`Found ${allVideoFiles.length} video files, ${cameraVideoFiles.length} matching camera ${event.camera}`);
 
                 // Check each video file for timestamp match
-                for (const file of videoFiles) {
+                for (const file of cameraVideoFiles) {
                     // Extract timestamp from filename
                     // Format examples:
                     // - POD1_00_20250424153423.mp4
                     // - POD1-02_20250424153423.mp4
                     const match = file.match(/(\d{14})/);
-                    if (!match) continue;
+                    if (!match) {
+                        console.log(`No timestamp found in filename: ${file}`);
+                        continue;
+                    }
 
                     const videoTimestamp = match[1];
+
+                    // FIXED PARSING
                     const vYear = parseInt(videoTimestamp.substr(0, 4));
-                    const vMonth = parseInt(videoTimestamp.substr(4, 6)) - 1; // JS months are 0-based
-                    const vDay = parseInt(videoTimestamp.substr(6, 8));
-                    const vHour = parseInt(videoTimestamp.substr(8, 10));
-                    const vMinute = parseInt(videoTimestamp.substr(10, 12));
-                    const vSecond = parseInt(videoTimestamp.substr(12, 14));
+                    const vMonth = parseInt(videoTimestamp.substr(4, 2)) - 1; // JS months are 0-based
+                    const vDay = parseInt(videoTimestamp.substr(6, 2));
+                    const vHour = parseInt(videoTimestamp.substr(8, 2));
+                    const vMinute = parseInt(videoTimestamp.substr(10, 2));
+                    const vSecond = parseInt(videoTimestamp.substr(12, 2));
 
                     // Create video date for comparison
                     try {
@@ -173,8 +225,7 @@ async function findMatchingVideo(event) {
                         // Calculate time difference
                         const timeDiff = Math.abs(videoTime - compareTime);
 
-                        // Use a generous time window to ensure we find matches
-                        const timeWindow = 120 * 1000; // 2 minutes
+                        console.log(`Video: ${file}, Time diff: ${timeDiff}ms, Date: ${videoDate.toISOString()}`);
 
                         // Update best match if this video is closer in time
                         if (timeDiff < minTimeDiff && timeDiff <= timeWindow) {
@@ -188,6 +239,8 @@ async function findMatchingVideo(event) {
                             if (!bestMatch.startsWith('/')) {
                                 bestMatch = '/' + bestMatch;
                             }
+
+                            console.log(`New best match: ${bestMatch} (${timeDiff}ms)`);
                         }
                     } catch (dateErr) {
                         console.error(`Error parsing date from video filename ${file}:`, dateErr);
@@ -196,6 +249,12 @@ async function findMatchingVideo(event) {
             } catch (dirErr) {
                 console.error(`Error reading directory ${videoDir}:`, dirErr);
             }
+        }
+
+        if (bestMatch) {
+            console.log(`Found best match for event ${event.id}: ${bestMatch} (${minTimeDiff}ms)`);
+        } else {
+            console.log(`No match found for event ${event.id}`);
         }
 
         return bestMatch;
@@ -227,7 +286,7 @@ async function migrateVideoPaths() {
     // Process each event
     for (let i = 0; i < events.length; i++) {
         const event = events[i];
-        console.log(`Processing event ${i + 1}/${events.length}: ID ${event.id}`);
+        console.log(`\nProcessing event ${i + 1}/${events.length}: ID ${event.id}`);
 
         // Skip events that already have a video path
         if (event.videoPath) {

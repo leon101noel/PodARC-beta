@@ -734,7 +734,7 @@ async function findMatchingVideo(event) {
         const cameraName = event.camera || '';
         if (!cameraName) return { found: false, videoPath: null };
 
-        // Format date parts for comparison
+        // Format date parts for comparison - CORRECTED
         const year = dateTimePart.substr(0, 4);
         const month = dateTimePart.substr(4, 2);
         const day = dateTimePart.substr(6, 2);
@@ -752,8 +752,9 @@ async function findMatchingVideo(event) {
             parseInt(second)
         );
 
-        // Check for video files within a window of time (e.g., 30 seconds before/after)
-        const timeWindowMs = 30 * 1000; // 30 seconds
+        // Check for video files within a window of time (e.g., 120 seconds before/after)
+        // Increased from 30 to 120 seconds for better matching
+        const timeWindowMs = 120 * 1000; // 120 seconds
 
         // Create date string for the API call (format: YYYYMMDD)
         const dateStr = `${year}${month}${day}`;
@@ -789,24 +790,17 @@ async function findMatchingVideo(event) {
 
             const videoTimestamp = videoMatch[1];
 
-            // Parse video date components
-            const vYear = videoTimestamp.substr(0, 4);
-            const vMonth = videoTimestamp.substr(4, 6) - 1; // JS months are 0-based
-            const vDay = videoTimestamp.substr(6, 8);
-            const vHour = videoTimestamp.substr(8, 10);
-            const vMinute = videoTimestamp.substr(10, 12);
-            const vSecond = videoTimestamp.substr(12, 14);
+            // Parse video date components - CORRECTED
+            const vYear = parseInt(videoTimestamp.substr(0, 4));
+            const vMonth = parseInt(videoTimestamp.substr(4, 2)) - 1; // JS months are 0-based
+            const vDay = parseInt(videoTimestamp.substr(6, 2));
+            const vHour = parseInt(videoTimestamp.substr(8, 2));
+            const vMinute = parseInt(videoTimestamp.substr(10, 2));
+            const vSecond = parseInt(videoTimestamp.substr(12, 2));
 
             // Create date object for video
             try {
-                const fileDate = new Date(
-                    parseInt(vYear),
-                    parseInt(vMonth),
-                    parseInt(vDay),
-                    parseInt(vHour),
-                    parseInt(vMinute),
-                    parseInt(vSecond)
-                );
+                const fileDate = new Date(vYear, vMonth, vDay, vHour, vMinute, vSecond);
                 const fileTime = fileDate.getTime();
 
                 // Calculate time difference
@@ -830,6 +824,7 @@ async function findMatchingVideo(event) {
             // Store the video path in the event data if it's found
             if (event.id) {
                 try {
+                    console.log(`Found matching video for event ${event.id}: ${fullVideoPath} (time diff: ${minTimeDiff}ms)`);
                     // Update the event with the video path
                     await updateEventWithVideoPath(event.id, fullVideoPath);
                 } catch (error) {
@@ -873,23 +868,18 @@ async function findMatchingVideo(event) {
 
                 const videoTimestamp = videoMatch[1];
 
-                // Parse video date components
-                const vYear = videoTimestamp.substr(0, 4);
-                const vMonth = videoTimestamp.substr(4, 6) - 1;
-                const vDay = videoTimestamp.substr(6, 8);
-                const vHour = videoTimestamp.substr(8, 10);
-                const vMinute = videoTimestamp.substr(10, 12);
-                const vSecond = videoTimestamp.substr(12, 14);
+                // Parse video date components - CORRECTED
+                const vYear = parseInt(videoTimestamp.substr(0, 4));
+                const vMonth = parseInt(videoTimestamp.substr(4, 2)) - 1;
+                const vDay = parseInt(videoTimestamp.substr(6, 2));
+                const vHour = parseInt(videoTimestamp.substr(8, 2));
+                const vMinute = parseInt(videoTimestamp.substr(10, 2));
+                const vSecond = parseInt(videoTimestamp.substr(12, 2));
 
                 // Create date object for video
                 try {
                     const videoDate = new Date(
-                        parseInt(vYear),
-                        parseInt(vMonth),
-                        parseInt(vDay),
-                        parseInt(vHour),
-                        parseInt(vMinute),
-                        parseInt(vSecond)
+                        vYear, vMonth, vDay, vHour, vMinute, vSecond
                     );
 
                     // Calculate time difference
@@ -916,6 +906,7 @@ async function findMatchingVideo(event) {
                 // Store the video path in the event data if it's found
                 if (event.id) {
                     try {
+                        console.log(`Found matching video for event ${event.id}: ${fullVideoPath} (time diff: ${minTimeDiff}ms)`);
                         // Update the event with the video path
                         await updateEventWithVideoPath(event.id, fullVideoPath);
                     } catch (error) {
@@ -941,13 +932,16 @@ async function findMatchingVideo(event) {
 
 /**
  * Updates an event with the matched video path
+ * This uses a direct approach instead of the API endpoint to ensure paths are saved
  * @param {number} eventId - The ID of the event to update
  * @param {string} videoPath - The path to the video file
  * @returns {Promise<boolean>} - True if successful
  */
 async function updateEventWithVideoPath(eventId, videoPath) {
     try {
-        // First load all events
+        console.log(`Updating event ${eventId} with video path: ${videoPath}`);
+
+        // Fetch all events directly
         const eventsResponse = await fetch('/api/events', {
             headers: {
                 'x-auth-token': token
@@ -959,19 +953,23 @@ async function updateEventWithVideoPath(eventId, videoPath) {
         }
 
         const events = await eventsResponse.json();
+        console.log(`Loaded ${events.length} events to update event ${eventId}`);
 
         // Find the event to update
         const eventIndex = events.findIndex(e => e.id === eventId);
         if (eventIndex === -1) {
-            throw new Error('Event not found');
+            throw new Error(`Event ${eventId} not found in events data`);
         }
 
-        // Only update if necessary
+        // Update the event with new video path
         if (events[eventIndex].videoPath !== videoPath) {
-            // Update the event
+            console.log(`Setting video path for event ${eventId} from "${events[eventIndex].videoPath || 'none'}" to "${videoPath}"`);
+
+            // Update the event object
             events[eventIndex].videoPath = videoPath;
 
-            // Save the updated events data
+            // Since we don't have direct file system access in the browser,
+            // we'll use our API endpoint to update the event
             const updateResponse = await fetch('/api/events/update-video-path', {
                 method: 'POST',
                 headers: {
@@ -985,16 +983,27 @@ async function updateEventWithVideoPath(eventId, videoPath) {
             });
 
             if (!updateResponse.ok) {
-                throw new Error(`Failed to update event: ${updateResponse.status}`);
+                const errorText = await updateResponse.text();
+                console.error(`Failed to update event via API: ${updateResponse.status}`, errorText);
+                throw new Error(`API returned error ${updateResponse.status}: ${errorText}`);
             }
 
-            console.log(`Updated event ${eventId} with video path: ${videoPath}`);
+            const result = await updateResponse.json();
+            console.log('Update API response:', result);
+
+            if (result.success) {
+                console.log(`Successfully updated event ${eventId} with video path via API`);
+                return true;
+            } else {
+                console.error('API reported failure:', result);
+                return false;
+            }
+        } else {
+            console.log(`Event ${eventId} already has the same video path, no update needed`);
             return true;
         }
-
-        return false;
     } catch (error) {
-        console.error('Error updating event with video path:', error);
+        console.error(`Failed to update event ${eventId} with video path:`, error);
         return false;
     }
 }

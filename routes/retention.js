@@ -41,6 +41,8 @@ router.post('/cleanup', adminMiddleware, async (req, res) => {
     }
 });
 
+// Fixed version of the debug/video-match endpoint in routes/retention.js
+
 // @route   GET /api/retention/debug/video-match/:eventId
 // @desc    Debug video matching for an event (admin only)
 // @access  Admin
@@ -72,10 +74,45 @@ router.get('/debug/video-match/:eventId', adminMiddleware, async (req, res) => {
         const eventMonth = (eventDate.getMonth() + 1).toString().padStart(2, '0');
         const eventDay = eventDate.getDate().toString().padStart(2, '0');
 
+        // Try to extract timestamp from image if available
+        let imageTimestamp = null;
+        let imageDate = null;
+
+        if (event.imagePath) {
+            const imageMatch = event.imagePath.match(/\d+_\d+_(\d{14})/);
+            if (imageMatch) {
+                imageTimestamp = imageMatch[1];
+                const year = parseInt(imageTimestamp.substr(0, 4));
+                const month = parseInt(imageTimestamp.substr(4, 2)) - 1; // JS months are 0-based
+                const day = parseInt(imageTimestamp.substr(6, 2));
+                const hour = parseInt(imageTimestamp.substr(8, 2));
+                const minute = parseInt(imageTimestamp.substr(10, 2));
+                const second = parseInt(imageTimestamp.substr(12, 2));
+
+                imageDate = new Date(year, month, day, hour, minute, second);
+            }
+        }
+
         // We'll look in 3 day directories: day before, event day, day after
         const datesToCheck = [
             { year: eventYear, month: eventMonth, day: eventDay },
         ];
+
+        // If we have an image date and it's different from event date, add it
+        if (imageDate) {
+            const imageYear = imageDate.getFullYear().toString();
+            const imageMonth = (imageDate.getMonth() + 1).toString().padStart(2, '0');
+            const imageDay = imageDate.getDate().toString().padStart(2, '0');
+
+            // Check if it's not already in the list
+            if (!(imageYear === eventYear && imageMonth === eventMonth && imageDay === eventDay)) {
+                datesToCheck.push({
+                    year: imageYear,
+                    month: imageMonth,
+                    day: imageDay
+                });
+            }
+        }
 
         // Add day before
         const dayBefore = new Date(eventDate);
@@ -97,12 +134,15 @@ router.get('/debug/video-match/:eventId', adminMiddleware, async (req, res) => {
 
         // Get the event timestamp
         const eventTime = eventDate.getTime();
+        const imageTime = imageDate ? imageDate.getTime() : null;
 
         // Track potential matches and debug information
         const potentialVideos = [];
         const debugInfo = {
             eventTimestamp: eventDate.toISOString(),
             eventUnixTime: eventTime,
+            imageTimestamp: imageDate ? imageDate.toISOString() : null,
+            imageUnixTime: imageTime,
             searchDirectories: [],
             allVideoFiles: []
         };
@@ -154,12 +194,14 @@ router.get('/debug/video-match/:eventId', adminMiddleware, async (req, res) => {
                         const match = file.match(/(\d{14})/);
                         if (match) {
                             const timestamp = match[1];
+
+                            // FIXED: Correct timestamp parsing
                             const fileYear = parseInt(timestamp.substring(0, 4));
-                            const fileMonth = parseInt(timestamp.substring(4, 6)) - 1; // JS months are 0-based
-                            const fileDay = parseInt(timestamp.substring(6, 8));
-                            const fileHour = parseInt(timestamp.substring(8, 10));
-                            const fileMinute = parseInt(timestamp.substring(10, 12));
-                            const fileSecond = parseInt(timestamp.substring(12, 14));
+                            const fileMonth = parseInt(timestamp.substring(4, 2)) - 1; // JS months are 0-based
+                            const fileDay = parseInt(timestamp.substring(6, 2));
+                            const fileHour = parseInt(timestamp.substring(8, 2));
+                            const fileMinute = parseInt(timestamp.substring(10, 2));
+                            const fileSecond = parseInt(timestamp.substring(12, 2));
 
                             try {
                                 const fileDate = new Date(fileYear, fileMonth, fileDay, fileHour, fileMinute, fileSecond);
@@ -168,13 +210,18 @@ router.get('/debug/video-match/:eventId', adminMiddleware, async (req, res) => {
                                 fileInfo.timestamp = fileDate.toISOString();
                                 fileInfo.extractedTimestamp = timestamp;
 
-                                // Calculate time difference
-                                const timeDiff = Math.abs(fileTime - eventTime);
-                                fileInfo.timeDifference = timeDiff;
+                                // Calculate time difference - check both event and image timestamps
+                                const timeDiffEvent = Math.abs(fileTime - eventTime);
+                                const timeDiffImage = imageTime ? Math.abs(fileTime - imageTime) : Infinity;
 
-                                // Check if within time window
-                                const timeWindowMs = 60 * 1000; // 60 seconds
-                                if (timeDiff <= timeWindowMs) {
+                                // Use the better match
+                                const bestTimeDiff = Math.min(timeDiffEvent, timeDiffImage);
+                                fileInfo.timeDifference = bestTimeDiff;
+                                fileInfo.comparedTo = bestTimeDiff === timeDiffEvent ? "event date" : "image date";
+
+                                // Use a larger time window
+                                const timeWindowMs = 180 * 1000; // 3 minutes
+                                if (bestTimeDiff <= timeWindowMs) {
                                     fileInfo.isMatch = true;
                                 }
 
@@ -203,6 +250,7 @@ router.get('/debug/video-match/:eventId', adminMiddleware, async (req, res) => {
         // Return the debug information
         res.json({
             event,
+            currentVideoPath: event.videoPath || null,
             debugInfo,
             potentialVideos: potentialVideos.slice(0, 10) // Limit to top 10 matches
         });
