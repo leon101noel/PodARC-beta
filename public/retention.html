@@ -137,6 +137,49 @@
             }
         }
     </style>
+    <style>
+        /* Debug tools styles */
+        .debug-tools {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #3498db;
+        }
+
+        .debug-tools-description {
+            margin-bottom: 15px;
+            color: #7f8c8d;
+        }
+
+        .debug-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .debug-result {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #272822;
+            border-radius: 4px;
+            color: #f8f8f2;
+        }
+
+        .debug-result-title {
+            color: #66d9ef;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+
+        .debug-result-content {
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            line-height: 1.4;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -238,6 +281,22 @@
                     </div>
                     <div id="cleanup-log-entries">
                         <div class="log-empty">No cleanup operations have been performed yet.</div>
+                    </div>
+                </div>
+                <div class="debug-tools">
+                    <h3>Debug Tools</h3>
+                    <div class="debug-tools-description">
+                        <p>These tools can help diagnose issues with video file deletion during cleanup.</p>
+                    </div>
+
+                    <div class="debug-actions">
+                        <button id="check-dir-structure-btn" class="secondary-button">Check Directory Structure</button>
+                        <button id="check-video-match-btn" class="secondary-button">Test Video Matching</button>
+                    </div>
+
+                    <div id="debug-result" class="debug-result" style="display: none;">
+                        <h4 class="debug-result-title">Debug Results</h4>
+                        <pre id="debug-result-content" class="debug-result-content"></pre>
                     </div>
                 </div>
             </div>
@@ -707,6 +766,85 @@
 
             // Load saved log entries on page load
             loadLogEntries();
+        });
+
+        // Debug tools functionality
+        const checkDirStructureBtn = document.getElementById('check-dir-structure-btn');
+        const checkVideoMatchBtn = document.getElementById('check-video-match-btn');
+        const debugResult = document.getElementById('debug-result');
+        const debugResultContent = document.getElementById('debug-result-content');
+
+        // Directory structure check
+        checkDirStructureBtn.addEventListener('click', async () => {
+            try {
+                debugResultContent.textContent = 'Checking directory structure...';
+                debugResult.style.display = 'block';
+
+                const response = await fetch('/api/retention/debug/directory-structure', {
+                    headers: {
+                        'x-auth-token': token
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API returned ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                debugResultContent.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                debugResultContent.textContent = 'Error checking directory structure:\n' + error.message;
+            }
+        });
+
+        // Video match testing
+        checkVideoMatchBtn.addEventListener('click', async () => {
+            try {
+                // Let user select an event to test
+                const eventIdStr = prompt('Enter event ID to test video matching:');
+                if (!eventIdStr) return;
+
+                const eventId = parseInt(eventIdStr);
+                if (isNaN(eventId)) {
+                    throw new Error('Invalid event ID');
+                }
+
+                debugResultContent.textContent = `Testing video matching for event ${eventId}...`;
+                debugResult.style.display = 'block';
+
+                const response = await fetch(`/api/retention/debug/video-match/${eventId}`, {
+                    headers: {
+                        'x-auth-token': token
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API returned ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+
+                // Format the response for better readability
+                const formattedResult = {
+                    event: {
+                        id: data.event.id,
+                        date: data.event.date,
+                        camera: data.event.camera,
+                        subject: data.event.subject
+                    },
+                    searchDirectories: data.debugInfo.searchDirectories,
+                    matchingVideos: data.potentialVideos.map(video => ({
+                        filename: video.filename,
+                        path: video.path,
+                        timeDifference: `${video.timeDifference}ms`,
+                        isMatch: video.isMatch
+                    }))
+                };
+
+                debugResultContent.textContent = JSON.stringify(formattedResult, null, 2);
+            } catch (error) {
+                debugResultContent.textContent = 'Error testing video matching:\n' + error.message;
+            }
         });
     </script>
 </body>

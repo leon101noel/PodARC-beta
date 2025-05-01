@@ -122,59 +122,118 @@ class EventRetentionService {
                 // Try to find and delete associated video files
                 // This is more complex as the video filename structure is not directly stored in the event
                 if (event.camera) {
-                    // Extract date from event to locate potential video directory
-                    const eventDate = new Date(event.date);
-                    const year = eventDate.getFullYear().toString();
-                    const month = (eventDate.getMonth() + 1).toString().padStart(2, '0');
-                    const day = eventDate.getDate().toString().padStart(2, '0');
+                    try {
+                        // Extract date from event to locate potential video directory
+                        const eventDate = new Date(event.date);
+                        const eventYear = eventDate.getFullYear().toString();
+                        const eventMonth = (eventDate.getMonth() + 1).toString().padStart(2, '0');
+                        const eventDay = eventDate.getDate().toString().padStart(2, '0');
 
-                    // Construct the video directory path
-                    const videoDir = path.join(this.videosBasePath, 'videos', year, month, day);
+                        // This matches how the frontend discovers videos
+                        // We'll search in:
+                        // 1. The exact date directory
+                        // 2. One day before (for events near midnight)
+                        // 3. One day after (for events near midnight)
+                        const datesToCheck = [
+                            { year: eventYear, month: eventMonth, day: eventDay },
+                        ];
 
-                    // Check if directory exists
-                    if (fs.existsSync(videoDir)) {
-                        try {
-                            // Read all files in the directory
-                            const files = fs.readdirSync(videoDir);
+                        // Add day before
+                        const dayBefore = new Date(eventDate);
+                        dayBefore.setDate(dayBefore.getDate() - 1);
+                        datesToCheck.push({
+                            year: dayBefore.getFullYear().toString(),
+                            month: (dayBefore.getMonth() + 1).toString().padStart(2, '0'),
+                            day: dayBefore.getDate().toString().padStart(2, '0')
+                        });
 
-                            // Filter for files that match the camera pattern
-                            const cameraFiles = files.filter(file =>
-                                file.startsWith(event.camera) && file.toLowerCase().endsWith('.mp4')
-                            );
+                        // Add day after
+                        const dayAfter = new Date(eventDate);
+                        dayAfter.setDate(dayAfter.getDate() + 1);
+                        datesToCheck.push({
+                            year: dayAfter.getFullYear().toString(),
+                            month: (dayAfter.getMonth() + 1).toString().padStart(2, '0'),
+                            day: dayAfter.getDate().toString().padStart(2, '0')
+                        });
 
-                            // Get the event timestamp to compare with video filenames
-                            const eventTime = eventDate.getTime();
+                        // Get the event timestamp to compare with video filenames
+                        const eventTime = eventDate.getTime();
 
-                            // Delete matching video files (within a time window)
-                            for (const file of cameraFiles) {
-                                // Extract timestamp from filename format: POD1_00_20250424153423.mp4
-                                const match = file.match(/(\d{14})/);
-                                if (match) {
-                                    const timestamp = match[1];
-                                    const fileYear = parseInt(timestamp.substring(0, 4));
-                                    const fileMonth = parseInt(timestamp.substring(4, 6)) - 1;
-                                    const fileDay = parseInt(timestamp.substring(6, 8));
-                                    const fileHour = parseInt(timestamp.substring(8, 10));
-                                    const fileMinute = parseInt(timestamp.substring(10, 12));
-                                    const fileSecond = parseInt(timestamp.substring(12, 14));
+                        // Check each potential date directory
+                        for (const dateToCheck of datesToCheck) {
+                            const { year, month, day } = dateToCheck;
 
-                                    const fileDate = new Date(fileYear, fileMonth, fileDay, fileHour, fileMinute, fileSecond);
-                                    const fileTime = fileDate.getTime();
+                            // Construct the video directory path
+                            const videoDir = path.join(this.videosBasePath, 'public', 'videos', year, month, day);
 
-                                    // Check if file is within a 5-minute window of the event
-                                    const timeDiff = Math.abs(fileTime - eventTime);
-                                    if (timeDiff <= 5 * 60 * 1000) {
-                                        const fullVideoPath = path.join(videoDir, file);
-                                        await unlinkAsync(fullVideoPath);
-                                        stats.deletedVideos++;
-                                        console.log(`Deleted video: ${fullVideoPath}`);
+                            // Check if directory exists
+                            if (fs.existsSync(videoDir)) {
+                                // Read all files in the directory
+                                const files = fs.readdirSync(videoDir);
+
+                                // Filter for files that match the camera pattern
+                                const cameraFiles = files.filter(file =>
+                                    file.startsWith(event.camera) && file.toLowerCase().endsWith('.mp4')
+                                );
+
+                                console.log(`Found ${cameraFiles.length} potential video files for event ${event.id} in directory ${videoDir}`);
+
+                                // Check each potential video file
+                                for (const file of cameraFiles) {
+                                    // Extract timestamp from filename
+                                    // Format examples:
+                                    // - POD1_00_20250424153423.mp4
+                                    // - POD1-02_20250424153423.mp4
+                                    // We're looking for 14 consecutive digits (YYYYMMDDhhmmss)
+                                    const match = file.match(/(\d{14})/);
+                                    if (match) {
+                                        const timestamp = match[1];
+                                        const fileYear = parseInt(timestamp.substring(0, 4));
+                                        const fileMonth = parseInt(timestamp.substring(4, 6)) - 1; // JS months are 0-based
+                                        const fileDay = parseInt(timestamp.substring(6, 8));
+                                        const fileHour = parseInt(timestamp.substring(8, 10));
+                                        const fileMinute = parseInt(timestamp.substring(10, 12));
+                                        const fileSecond = parseInt(timestamp.substring(12, 14));
+
+                                        // Create a Date object from the filename timestamp
+                                        try {
+                                            const fileDate = new Date(fileYear, fileMonth, fileDay, fileHour, fileMinute, fileSecond);
+                                            const fileTime = fileDate.getTime();
+
+                                            // Check if file is within a reasonable time window of the event
+                                            // The frontend uses 30 seconds, but we'll use a slightly larger window (60 seconds)
+                                            // to be sure we catch the right videos
+                                            const timeDiff = Math.abs(fileTime - eventTime);
+                                            const timeWindowMs = 60 * 1000; // 60 seconds
+
+                                            if (timeDiff <= timeWindowMs) {
+                                                const fullVideoPath = path.join(videoDir, file);
+                                                console.log(`Found matching video for event ${event.id}: ${fullVideoPath} (time diff: ${timeDiff}ms)`);
+
+                                                try {
+                                                    await unlinkAsync(fullVideoPath);
+                                                    stats.deletedVideos++;
+                                                    console.log(`Deleted video: ${fullVideoPath}`);
+                                                } catch (unlinkErr) {
+                                                    // Don't fail if video doesn't exist
+                                                    if (unlinkErr.code !== 'ENOENT') {
+                                                        console.error(`Error deleting video file ${fullVideoPath}:`, unlinkErr);
+                                                        stats.errors.push(`Failed to delete video for event ${event.id}: ${unlinkErr.message}`);
+                                                    }
+                                                }
+                                            }
+                                        } catch (dateErr) {
+                                            console.error(`Error parsing date from filename ${file}:`, dateErr);
+                                        }
                                     }
                                 }
+                            } else {
+                                console.log(`Video directory does not exist: ${videoDir}`);
                             }
-                        } catch (dirErr) {
-                            console.error(`Error processing video directory for event ${event.id}:`, dirErr);
-                            stats.errors.push(`Failed to process video directory for event ${event.id}: ${dirErr.message}`);
                         }
+                    } catch (videoErr) {
+                        console.error(`Error processing videos for event ${event.id}:`, videoErr);
+                        stats.errors.push(`Failed to process videos for event ${event.id}: ${videoErr.message}`);
                     }
                 }
 
