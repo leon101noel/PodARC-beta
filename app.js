@@ -14,7 +14,6 @@ const statsRoutes = require('./routes/stats');
 const { router: sitesRoutes, matchCameraToSite } = require('./routes/sites');
 // Add the SMTP server import
 const { initSmtpServer, processEmail } = require('./smtp-server');
-const { initFtpServer } = require('./ftp-server');
 
 const app = express();
 const PORT = process.env.PORT || 3020;
@@ -255,7 +254,6 @@ app.get('/api/events', (req, res) => {
     }
 });
 
-// New API route to list video files
 // New API route to list video files from date-based directories
 app.get('/api/videos/list', authMiddleware, (req, res) => {
     try {
@@ -617,7 +615,36 @@ app.post('/api/test/create-event', (req, res) => {
     }
 });
 
-// Start the server - THERE SHOULD BE ONLY ONE app.listen() CALL
+// API endpoint to manually notify about a video upload
+// This replaces the FTP server event notification
+app.post('/api/videos/notify-upload', authMiddleware, (req, res) => {
+    try {
+        const { path, camera, timestamp } = req.body;
+        
+        if (!path || !camera) {
+            return res.status(400).json({ error: 'Missing required fields: path and camera' });
+        }
+        
+        // Notify all connected SSE clients
+        if (sseClients.size > 0) {
+            const notification = {
+                type: 'video-uploaded',
+                videoPath: path,
+                camera: camera,
+                timestamp: timestamp || new Date().toISOString()
+            };
+            
+            notifyClients(notification);
+        }
+        
+        res.json({ success: true, message: 'Upload notification sent' });
+    } catch (error) {
+        console.error('Error sending video upload notification:', error);
+        res.status(500).json({ error: 'Failed to send notification' });
+    }
+});
+
+// Start the server
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 
@@ -729,25 +756,5 @@ app.listen(PORT, () => {
         console.log('Warning: No email receiving method is enabled. Configure SMTP server settings.');
     }
 
-    // Initialize the FTP server
-    const ftpServer = initFtpServer();
-
-    // Listen for file upload events
-    if (ftpServer) {
-        ftpServer.on('upload:complete', (fileInfo) => {
-            console.log(`Server notified of new video upload: ${fileInfo.path} from camera: ${fileInfo.camera}`);
-
-            // Notify all connected SSE clients
-            if (sseClients.size > 0) {
-                const notification = {
-                    type: 'video-uploaded',
-                    videoPath: fileInfo.path,
-                    camera: fileInfo.camera,
-                    timestamp: fileInfo.timestamp
-                };
-
-                notifyClients(notification);
-            }
-        });
-    }
+    console.log('Note: External FTP server should be configured separately to upload files to the videos directory');
 });

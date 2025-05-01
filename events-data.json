@@ -1,1 +1,23 @@
-[]
+[
+  {
+    "id": 1746084344514,
+    "messageId": "test-1746084344514",
+    "date": "2025-05-01T07:25:44.514Z",
+    "subject": "Test Event at 08:25:44",
+    "imagePath": "/images/test.jpg",
+    "camera": "Test Camera",
+    "eventType": "Test Detection",
+    "device": "Test Device",
+    "acknowledged": true,
+    "acknowledgedAt": "2025-05-01T07:25:51.548Z",
+    "responseTimeMinutes": 0,
+    "acknowledgedBy": {
+      "userId": 1,
+      "username": "admin",
+      "name": "Administrator"
+    },
+    "tags": [
+      "Other"
+    ]
+  }
+]
