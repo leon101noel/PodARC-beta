@@ -674,31 +674,69 @@ app.post('/api/videos/notify-upload', authMiddleware, (req, res) => {
     }
 });
 
-// API endpoint to update an event with a matched video path
-app.post('/api/events/update-video-path', authMiddleware, async (req, res) => {
+// @route   POST /api/events/update-video-path
+// @desc    Update an event with the matched video path
+// @access  Private (requires authentication)
+app.post('/api/events/update-video-path', authMiddleware, (req, res) => {
     try {
         const { eventId, videoPath } = req.body;
 
         if (!eventId || !videoPath) {
-            return res.status(400).json({ error: 'Event ID and video path are required' });
+            return res.status(400).json({
+                success: false,
+                error: 'Event ID and video path are required'
+            });
         }
 
+        console.log(`Updating event ${eventId} with video path: ${videoPath}`);
+
         // Read current events data
-        const events = readEventsData();
+        const eventsFilePath = path.join(__dirname, 'events-data.json');
+        let events;
+
+        try {
+            const data = fs.readFileSync(eventsFilePath, 'utf8');
+            events = JSON.parse(data);
+        } catch (readErr) {
+            console.error('Error reading events data:', readErr);
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to read events data'
+            });
+        }
 
         // Find the event
         const eventIndex = events.findIndex(event => event.id === eventId);
         if (eventIndex === -1) {
-            return res.status(404).json({ error: 'Event not found' });
+            return res.status(404).json({
+                success: false,
+                error: 'Event not found'
+            });
+        }
+
+        // Check if the path is already set
+        if (events[eventIndex].videoPath === videoPath) {
+            console.log(`Event ${eventId} already has the same video path, no update needed`);
+            return res.json({
+                success: true,
+                message: 'Event already has this video path',
+                event: events[eventIndex]
+            });
         }
 
         // Update the event with the video path
         events[eventIndex].videoPath = videoPath;
 
         // Save the updated events
-        const success = writeEventsData(events);
-        if (!success) {
-            return res.status(500).json({ error: 'Failed to update event' });
+        try {
+            fs.writeFileSync(eventsFilePath, JSON.stringify(events, null, 2));
+            console.log(`Successfully updated event ${eventId} with video path ${videoPath}`);
+        } catch (writeErr) {
+            console.error('Error writing events data:', writeErr);
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to write events data'
+            });
         }
 
         res.json({
@@ -708,7 +746,10 @@ app.post('/api/events/update-video-path', authMiddleware, async (req, res) => {
         });
     } catch (error) {
         console.error('Error updating event with video path:', error);
-        res.status(500).json({ error: 'Failed to update event with video path' });
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update event with video path'
+        });
     }
 });
 
@@ -719,20 +760,31 @@ app.post('/api/events/update-video-path', authMiddleware, async (req, res) => {
  */
 async function findMatchingVideo(event) {
     try {
-        // Extract the timestamp from the image file
-        if (!event.imagePath) return { found: false, videoPath: null };
+        console.log(`Finding matching video for event ${event.id}...`);
+
+        // Skip processing if no image path or camera
+        if (!event.imagePath) {
+            console.log('No image path available');
+            return { found: false, videoPath: null };
+        }
 
         // Try to extract timestamp from image filename
         // Format: 1745505272552_01_20250424153418000.jpg
         const imageMatch = event.imagePath.match(/\d+_\d+_(\d{14})/);
-        if (!imageMatch) return { found: false, videoPath: null };
+        if (!imageMatch) {
+            console.log('No timestamp found in image path');
+            return { found: false, videoPath: null };
+        }
 
         const imageTimestamp = imageMatch[1]; // 20250424153418000
         const dateTimePart = imageTimestamp.substr(0, 14); // 20250424153418
 
         // Get camera name from event
         const cameraName = event.camera || '';
-        if (!cameraName) return { found: false, videoPath: null };
+        if (!cameraName) {
+            console.log('No camera name available');
+            return { found: false, videoPath: null };
+        }
 
         // Format date parts for comparison - CORRECTED
         const year = dateTimePart.substr(0, 4);
@@ -741,6 +793,8 @@ async function findMatchingVideo(event) {
         const hour = dateTimePart.substr(8, 2);
         const minute = dateTimePart.substr(10, 2);
         const second = dateTimePart.substr(12, 2);
+
+        console.log(`Image timestamp: ${year}-${month}-${day} ${hour}:${minute}:${second}`);
 
         // Create a date object for the image timestamp
         const imageDate = new Date(
@@ -751,6 +805,8 @@ async function findMatchingVideo(event) {
             parseInt(minute),
             parseInt(second)
         );
+
+        console.log(`Image date: ${imageDate.toISOString()}`);
 
         // Check for video files within a window of time (e.g., 120 seconds before/after)
         // Increased from 30 to 120 seconds for better matching
@@ -786,7 +842,10 @@ async function findMatchingVideo(event) {
             // Format: POD1_00_20250424153423.mp4
             // Format: POD1-02_20250424153423.mp4
             const videoMatch = filename.match(/(\d{14})/);
-            if (!videoMatch) continue;
+            if (!videoMatch) {
+                console.log(`No timestamp found in filename: ${filename}`);
+                continue;
+            }
 
             const videoTimestamp = videoMatch[1];
 
@@ -798,10 +857,14 @@ async function findMatchingVideo(event) {
             const vMinute = parseInt(videoTimestamp.substr(10, 2));
             const vSecond = parseInt(videoTimestamp.substr(12, 2));
 
+            console.log(`Video timestamp: ${vYear}-${vMonth + 1}-${vDay} ${vHour}:${vMinute}:${vSecond}`);
+
             // Create date object for video
             try {
                 const fileDate = new Date(vYear, vMonth, vDay, vHour, vMinute, vSecond);
                 const fileTime = fileDate.getTime();
+
+                console.log(`Video date: ${fileDate.toISOString()}`);
 
                 // Calculate time difference
                 const timeDiff = Math.abs(fileTime - imageDate.getTime());
@@ -821,15 +884,35 @@ async function findMatchingVideo(event) {
         if (bestMatch) {
             const fullVideoPath = `/videos/${bestMatch}`;
 
-            // Store the video path in the event data if it's found
+            console.log(`Found matching video for event ${event.id}: ${fullVideoPath} (time diff: ${minTimeDiff}ms)`);
+
+            // Store the video path in the event data immediately
             if (event.id) {
                 try {
-                    console.log(`Found matching video for event ${event.id}: ${fullVideoPath} (time diff: ${minTimeDiff}ms)`);
                     // Update the event with the video path
-                    await updateEventWithVideoPath(event.id, fullVideoPath);
+                    const updateResponse = await fetch('/api/events/update-video-path', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-auth-token': token
+                        },
+                        body: JSON.stringify({
+                            eventId: event.id,
+                            videoPath: fullVideoPath
+                        })
+                    });
+
+                    if (updateResponse.ok) {
+                        const result = await updateResponse.json();
+                        console.log(`Successfully updated event ${event.id} with video path: ${fullVideoPath}`);
+                        console.log('API response:', result);
+                    } else {
+                        console.error(`Failed to update event ${event.id} with video path: ${updateResponse.status}`);
+                        const errorText = await updateResponse.text();
+                        console.error('Error details:', errorText);
+                    }
                 } catch (error) {
                     console.error('Error updating event with video path:', error);
-                    // Continue even if update fails
                 }
             }
 
@@ -903,15 +986,35 @@ async function findMatchingVideo(event) {
             if (bestMatch) {
                 const fullVideoPath = `/videos/${bestMatch}`;
 
-                // Store the video path in the event data if it's found
+                console.log(`Found matching video in extended search for event ${event.id}: ${fullVideoPath} (time diff: ${minTimeDiff}ms)`);
+
+                // Store the video path in the event data immediately
                 if (event.id) {
                     try {
-                        console.log(`Found matching video for event ${event.id}: ${fullVideoPath} (time diff: ${minTimeDiff}ms)`);
                         // Update the event with the video path
-                        await updateEventWithVideoPath(event.id, fullVideoPath);
+                        const updateResponse = await fetch('/api/events/update-video-path', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-auth-token': token
+                            },
+                            body: JSON.stringify({
+                                eventId: event.id,
+                                videoPath: fullVideoPath
+                            })
+                        });
+
+                        if (updateResponse.ok) {
+                            const result = await updateResponse.json();
+                            console.log(`Successfully updated event ${event.id} with video path: ${fullVideoPath}`);
+                            console.log('API response:', result);
+                        } else {
+                            console.error(`Failed to update event ${event.id} with video path: ${updateResponse.status}`);
+                            const errorText = await updateResponse.text();
+                            console.error('Error details:', errorText);
+                        }
                     } catch (error) {
                         console.error('Error updating event with video path:', error);
-                        // Continue even if update fails
                     }
                 }
 

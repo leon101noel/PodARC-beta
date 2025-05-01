@@ -1238,6 +1238,41 @@
         }
     }
 
+    /**
+ * Update video path directly in the events-data.json file
+ * @param {number} eventId - ID of the event to update
+ * @param {string} videoPath - Video path to store
+ * @returns {boolean} - Success or failure
+ */
+    function updateEventWithVideoPathDirect(eventId, videoPath) {
+        try {
+            // Path to events data file
+            const eventsFilePath = path.join(__dirname, 'events-data.json');
+
+            // Read existing events
+            const eventsData = fs.readFileSync(eventsFilePath, 'utf8');
+            const events = JSON.parse(eventsData);
+
+            // Find the event
+            const eventIndex = events.findIndex(e => e.id === eventId);
+            if (eventIndex === -1) {
+                console.error(`Event ${eventId} not found in events data`);
+                return false;
+            }
+
+            // Update the event
+            events[eventIndex].videoPath = videoPath;
+
+            // Write back to file
+            fs.writeFileSync(eventsFilePath, JSON.stringify(events, null, 2));
+            console.log(`Updated event ${eventId} with video path ${videoPath}`);
+            return true;
+        } catch (error) {
+            console.error('Error updating event with video path directly:', error);
+            return false;
+        }
+    }
+
     // Function to update the video display with a button to open modal
     function updateEventVideoDisplay(event, videoInfo) {
         const videoContainer = document.getElementById('event-video-container');
@@ -1274,6 +1309,34 @@
             document.getElementById('open-video-btn').addEventListener('click', function () {
                 openVideoModal(videoInfo.videoPath, event, videoInfo.timeDifference);
             });
+
+            // IMPORTANT: Update the event in the database through the API
+            fetch('/api/events/update-video-path', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-auth-token': token
+                },
+                body: JSON.stringify({
+                    eventId: event.id,
+                    videoPath: videoInfo.videoPath
+                })
+            })
+                .then(response => {
+                    if (response.ok) {
+                        console.log(`Successfully stored video path for event ${event.id}`);
+                        return response.json();
+                    } else {
+                        console.error(`Failed to store video path for event ${event.id}: ${response.status}`);
+                        throw new Error(`API returned status ${response.status}`);
+                    }
+                })
+                .then(data => {
+                    console.log('Video path update response:', data);
+                })
+                .catch(error => {
+                    console.error('Error updating video path:', error);
+                });
         } else {
             // Get formatted date from event for the message
             const eventDate = new Date(event.date);
@@ -1314,7 +1377,6 @@
             }
         }
     }
-
     // Function to open the video modal
     function openVideoModal(videoPath, event, timeDifference) {
         // Get modal elements
