@@ -119,9 +119,28 @@ class EventRetentionService {
                     }
                 }
 
-                // Try to find and delete associated video files
-                // This is more complex as the video filename structure is not directly stored in the event
-                if (event.camera) {
+                // Try to delete associated video file using the saved path if available
+                if (event.videoPath) {
+                    try {
+                        // Handle relative path by joining with base path
+                        const fullVideoPath = path.join(this.videosBasePath, 'public', event.videoPath.replace(/^\/videos\//, ''));
+                        console.log(`Attempting to delete video: ${fullVideoPath}`);
+
+                        await unlinkAsync(fullVideoPath);
+                        stats.deletedVideos++;
+                        console.log(`Deleted video: ${fullVideoPath}`);
+                    } catch (videoErr) {
+                        // Don't fail if video doesn't exist
+                        if (videoErr.code !== 'ENOENT') {
+                            console.error(`Error deleting video for event ${event.id}:`, videoErr);
+                            stats.errors.push(`Failed to delete video for event ${event.id}: ${videoErr.message}`);
+                        } else {
+                            console.log(`Video not found for event ${event.id}: ${event.videoPath}`);
+                        }
+                    }
+                }
+                // Fallback to the original matching method if no direct video path is saved
+                else if (event.camera) {
                     try {
                         // Extract date from event to locate potential video directory
                         const eventDate = new Date(event.date);
@@ -181,10 +200,8 @@ class EventRetentionService {
                                 // Check each potential video file
                                 for (const file of cameraFiles) {
                                     // Extract timestamp from filename
-                                    // Format examples:
-                                    // - POD1_00_20250424153423.mp4
-                                    // - POD1-02_20250424153423.mp4
-                                    // We're looking for 14 consecutive digits (YYYYMMDDhhmmss)
+                                    // Format: POD1_00_20250424153423.mp4
+                                    // Format: POD1-02_20250424153423.mp4
                                     const match = file.match(/(\d{14})/);
                                     if (match) {
                                         const timestamp = match[1];
@@ -197,12 +214,18 @@ class EventRetentionService {
 
                                         // Create a Date object from the filename timestamp
                                         try {
-                                            const fileDate = new Date(fileYear, fileMonth, fileDay, fileHour, fileMinute, fileSecond);
+                                            const fileDate = new Date(
+                                                fileYear,
+                                                fileMonth,
+                                                fileDay,
+                                                fileHour,
+                                                fileMinute,
+                                                fileSecond
+                                            );
                                             const fileTime = fileDate.getTime();
 
                                             // Check if file is within a reasonable time window of the event
-                                            // The frontend uses 30 seconds, but we'll use a slightly larger window (60 seconds)
-                                            // to be sure we catch the right videos
+                                            // We'll use a slightly larger window (60 seconds) to be sure we catch the right videos
                                             const timeDiff = Math.abs(fileTime - eventTime);
                                             const timeWindowMs = 60 * 1000; // 60 seconds
 

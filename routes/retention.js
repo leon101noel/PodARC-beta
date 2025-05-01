@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const path = require('path');
+const fs = require('fs');
 const { authMiddleware, adminMiddleware } = require('../middleware/auth');
 const EventRetentionService = require('../event-retention');
 
@@ -215,7 +216,9 @@ router.get('/debug/video-match/:eventId', adminMiddleware, async (req, res) => {
     }
 });
 
-// Add this to help diagnose directory structure
+// @route   GET /api/retention/debug/directory-structure
+// @desc    Debug video directory structure (admin only)
+// @access  Admin
 router.get('/debug/directory-structure', adminMiddleware, (req, res) => {
     try {
         const videosBasePath = path.join(retentionService.videosBasePath, 'public', 'videos');

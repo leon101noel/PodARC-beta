@@ -323,7 +323,7 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             // Check if the user is logged in
             const token = localStorage.getItem('token');
             if (!token) {
@@ -476,14 +476,14 @@
 
                 // Add event listeners to buttons
                 document.querySelectorAll('.unlock-btn-small').forEach(btn => {
-                    btn.addEventListener('click', function() {
+                    btn.addEventListener('click', function () {
                         const eventId = parseInt(this.getAttribute('data-id'));
                         unlockEvent(eventId);
                     });
                 });
 
                 document.querySelectorAll('.view-event-btn').forEach(btn => {
-                    btn.addEventListener('click', function() {
+                    btn.addEventListener('click', function () {
                         const eventId = parseInt(this.getAttribute('data-id'));
                         window.location.href = `/?event=${eventId}`;
                     });
@@ -773,6 +773,12 @@
         const checkVideoMatchBtn = document.getElementById('check-video-match-btn');
         const debugResult = document.getElementById('debug-result');
         const debugResultContent = document.getElementById('debug-result-content');
+
+        // Get token from localStorage
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.error('No authentication token found');
+        }
 
         // Directory structure check
         checkDirStructureBtn.addEventListener('click', async () => {

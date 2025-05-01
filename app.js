@@ -674,6 +674,331 @@ app.post('/api/videos/notify-upload', authMiddleware, (req, res) => {
     }
 });
 
+// API endpoint to update an event with a matched video path
+app.post('/api/events/update-video-path', authMiddleware, async (req, res) => {
+    try {
+        const { eventId, videoPath } = req.body;
+
+        if (!eventId || !videoPath) {
+            return res.status(400).json({ error: 'Event ID and video path are required' });
+        }
+
+        // Read current events data
+        const events = readEventsData();
+
+        // Find the event
+        const eventIndex = events.findIndex(event => event.id === eventId);
+        if (eventIndex === -1) {
+            return res.status(404).json({ error: 'Event not found' });
+        }
+
+        // Update the event with the video path
+        events[eventIndex].videoPath = videoPath;
+
+        // Save the updated events
+        const success = writeEventsData(events);
+        if (!success) {
+            return res.status(500).json({ error: 'Failed to update event' });
+        }
+
+        res.json({
+            success: true,
+            message: 'Event updated with video path',
+            event: events[eventIndex]
+        });
+    } catch (error) {
+        console.error('Error updating event with video path:', error);
+        res.status(500).json({ error: 'Failed to update event with video path' });
+    }
+});
+
+/**
+ * Check if a video file exists for the given event
+ * @param {Object} event - The event object
+ * @returns {Promise<{found: boolean, videoPath: string|null}>} - Object with found status and path
+ */
+async function findMatchingVideo(event) {
+    try {
+        // Extract the timestamp from the image file
+        if (!event.imagePath) return { found: false, videoPath: null };
+
+        // Try to extract timestamp from image filename
+        // Format: 1745505272552_01_20250424153418000.jpg
+        const imageMatch = event.imagePath.match(/\d+_\d+_(\d{14})/);
+        if (!imageMatch) return { found: false, videoPath: null };
+
+        const imageTimestamp = imageMatch[1]; // 20250424153418000
+        const dateTimePart = imageTimestamp.substr(0, 14); // 20250424153418
+
+        // Get camera name from event
+        const cameraName = event.camera || '';
+        if (!cameraName) return { found: false, videoPath: null };
+
+        // Format date parts for comparison
+        const year = dateTimePart.substr(0, 4);
+        const month = dateTimePart.substr(4, 2);
+        const day = dateTimePart.substr(6, 2);
+        const hour = dateTimePart.substr(8, 2);
+        const minute = dateTimePart.substr(10, 2);
+        const second = dateTimePart.substr(12, 2);
+
+        // Create a date object for the image timestamp
+        const imageDate = new Date(
+            parseInt(year),
+            parseInt(month) - 1, // JavaScript months are 0-based
+            parseInt(day),
+            parseInt(hour),
+            parseInt(minute),
+            parseInt(second)
+        );
+
+        // Check for video files within a window of time (e.g., 30 seconds before/after)
+        const timeWindowMs = 30 * 1000; // 30 seconds
+
+        // Create date string for the API call (format: YYYYMMDD)
+        const dateStr = `${year}${month}${day}`;
+
+        // Get video files for this camera and date
+        const response = await fetch(`/api/videos/list?camera=${encodeURIComponent(cameraName)}&date=${dateStr}`, {
+            headers: {
+                'x-auth-token': token
+            }
+        });
+
+        if (!response.ok) {
+            console.warn(`Failed to fetch video list: ${response.status}`);
+            return { found: false, videoPath: null };
+        }
+
+        const videoFiles = await response.json();
+        console.log(`Found ${videoFiles.length} videos for camera ${cameraName} on ${dateStr}`);
+
+        // Find a video file with a timestamp close to the image timestamp
+        let bestMatch = null;
+        let minTimeDiff = Infinity;
+
+        for (const videoPath of videoFiles) {
+            // Extract the filename from the full path
+            const filename = videoPath.split('/').pop();
+
+            // Extract timestamp from video filename
+            // Format: POD1_00_20250424153423.mp4
+            // Format: POD1-02_20250424153423.mp4
+            const videoMatch = filename.match(/(\d{14})/);
+            if (!videoMatch) continue;
+
+            const videoTimestamp = videoMatch[1];
+
+            // Parse video date components
+            const vYear = videoTimestamp.substr(0, 4);
+            const vMonth = videoTimestamp.substr(4, 6) - 1; // JS months are 0-based
+            const vDay = videoTimestamp.substr(6, 8);
+            const vHour = videoTimestamp.substr(8, 10);
+            const vMinute = videoTimestamp.substr(10, 12);
+            const vSecond = videoTimestamp.substr(12, 14);
+
+            // Create date object for video
+            try {
+                const fileDate = new Date(
+                    parseInt(vYear),
+                    parseInt(vMonth),
+                    parseInt(vDay),
+                    parseInt(vHour),
+                    parseInt(vMinute),
+                    parseInt(vSecond)
+                );
+                const fileTime = fileDate.getTime();
+
+                // Calculate time difference
+                const timeDiff = Math.abs(fileTime - imageDate.getTime());
+
+                console.log(`Video: ${filename}, Time diff: ${timeDiff}ms`);
+
+                // Update best match if this video is closer in time
+                if (timeDiff < minTimeDiff && timeDiff <= timeWindowMs) {
+                    minTimeDiff = timeDiff;
+                    bestMatch = videoPath;
+                }
+            } catch (e) {
+                console.error(`Error parsing date for ${filename}:`, e);
+            }
+        }
+
+        if (bestMatch) {
+            const fullVideoPath = `/videos/${bestMatch}`;
+
+            // Store the video path in the event data if it's found
+            if (event.id) {
+                try {
+                    // Update the event with the video path
+                    await updateEventWithVideoPath(event.id, fullVideoPath);
+                } catch (error) {
+                    console.error('Error updating event with video path:', error);
+                    // Continue even if update fails
+                }
+            }
+
+            return {
+                found: true,
+                videoPath: fullVideoPath,
+                timeDifference: minTimeDiff
+            };
+        }
+
+        // If we didn't find a match, try expanding search to all dates
+        // This is useful if the event happens near midnight and the video
+        // might be in the next day's directory
+        if (videoFiles.length === 0) {
+            console.log("No videos found for this date, expanding search to all dates");
+
+            // Get all videos for this camera (without date restriction)
+            const allResponse = await fetch(`/api/videos/list?camera=${encodeURIComponent(cameraName)}`, {
+                headers: {
+                    'x-auth-token': token
+                }
+            });
+
+            if (!allResponse.ok) {
+                return { found: false, videoPath: null };
+            }
+
+            const allVideoFiles = await allResponse.json();
+            console.log(`Found ${allVideoFiles.length} videos for camera ${cameraName} across all dates`);
+
+            // Same matching logic as above
+            for (const videoPath of allVideoFiles) {
+                const filename = videoPath.split('/').pop();
+                const videoMatch = filename.match(/(\d{14})/);
+                if (!videoMatch) continue;
+
+                const videoTimestamp = videoMatch[1];
+
+                // Parse video date components
+                const vYear = videoTimestamp.substr(0, 4);
+                const vMonth = videoTimestamp.substr(4, 6) - 1;
+                const vDay = videoTimestamp.substr(6, 8);
+                const vHour = videoTimestamp.substr(8, 10);
+                const vMinute = videoTimestamp.substr(10, 12);
+                const vSecond = videoTimestamp.substr(12, 14);
+
+                // Create date object for video
+                try {
+                    const videoDate = new Date(
+                        parseInt(vYear),
+                        parseInt(vMonth),
+                        parseInt(vDay),
+                        parseInt(vHour),
+                        parseInt(vMinute),
+                        parseInt(vSecond)
+                    );
+
+                    // Calculate time difference
+                    const timeDiff = Math.abs(videoDate.getTime() - imageDate.getTime());
+
+                    console.log(`Extended search - Video: ${filename}, Time diff: ${timeDiff}ms`);
+
+                    // Use a larger time window for extended search (2 minutes)
+                    const extendedTimeWindow = 120 * 1000;
+
+                    // Update best match if this video is closer in time
+                    if (timeDiff < minTimeDiff && timeDiff <= extendedTimeWindow) {
+                        minTimeDiff = timeDiff;
+                        bestMatch = videoPath;
+                    }
+                } catch (e) {
+                    console.error(`Error parsing date for ${filename}:`, e);
+                }
+            }
+
+            if (bestMatch) {
+                const fullVideoPath = `/videos/${bestMatch}`;
+
+                // Store the video path in the event data if it's found
+                if (event.id) {
+                    try {
+                        // Update the event with the video path
+                        await updateEventWithVideoPath(event.id, fullVideoPath);
+                    } catch (error) {
+                        console.error('Error updating event with video path:', error);
+                        // Continue even if update fails
+                    }
+                }
+
+                return {
+                    found: true,
+                    videoPath: fullVideoPath,
+                    timeDifference: minTimeDiff
+                };
+            }
+        }
+
+        return { found: false, videoPath: null };
+    } catch (error) {
+        console.error('Error finding matching video:', error);
+        return { found: false, videoPath: null };
+    }
+}
+
+/**
+ * Updates an event with the matched video path
+ * @param {number} eventId - The ID of the event to update
+ * @param {string} videoPath - The path to the video file
+ * @returns {Promise<boolean>} - True if successful
+ */
+async function updateEventWithVideoPath(eventId, videoPath) {
+    try {
+        // First load all events
+        const eventsResponse = await fetch('/api/events', {
+            headers: {
+                'x-auth-token': token
+            }
+        });
+
+        if (!eventsResponse.ok) {
+            throw new Error(`Failed to fetch events: ${eventsResponse.status}`);
+        }
+
+        const events = await eventsResponse.json();
+
+        // Find the event to update
+        const eventIndex = events.findIndex(e => e.id === eventId);
+        if (eventIndex === -1) {
+            throw new Error('Event not found');
+        }
+
+        // Only update if necessary
+        if (events[eventIndex].videoPath !== videoPath) {
+            // Update the event
+            events[eventIndex].videoPath = videoPath;
+
+            // Save the updated events data
+            const updateResponse = await fetch('/api/events/update-video-path', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-auth-token': token
+                },
+                body: JSON.stringify({
+                    eventId: eventId,
+                    videoPath: videoPath
+                })
+            });
+
+            if (!updateResponse.ok) {
+                throw new Error(`Failed to update event: ${updateResponse.status}`);
+            }
+
+            console.log(`Updated event ${eventId} with video path: ${videoPath}`);
+            return true;
+        }
+
+        return false;
+    } catch (error) {
+        console.error('Error updating event with video path:', error);
+        return false;
+    }
+}
+
 // Start the server
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
