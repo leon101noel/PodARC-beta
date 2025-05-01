@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCTV Alert Monitor</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            overflow: auto;
+        }
+
+        .modal-content {
+            position: relative;
+            background-color: #fff;
+            margin: 10% auto;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            width: 90%;
+            max-width: 500px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+            .modal-header h2 {
+                margin: 0;
+            }
+
+        .close-modal {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+            .close-modal:hover {
+                color: #333;
+            }
+
+        /* Form styles */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+            .form-group label {
+                display: block;
+                margin-bottom: 8px;
+                font-weight: 500;
+                color: #2c3e50;
+            }
+
+            .form-group textarea {
+                width: 100%;
+                padding: 10px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                font-size: 14px;
+                font-family: inherit;
+                resize: vertical;
+            }
+
+                .form-group textarea:focus {
+                    border-color: #3498db;
+                    outline: none;
+                }
+
+        .form-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        /* Tag selector styles */
+        .tag-selector {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .tag-option {
+            display: inline-block;
+            padding: 6px 12px;
+            background-color: #f1f1f1;
+            border-radius: 16px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+
+            .tag-option:hover {
+                background-color: #e0e0e0;
+            }
+
+            .tag-option.selected {
+                background-color: #3498db;
+                color: white;
+            }
+
+        .loading-tags {
+            color: #7f8c8d;
+            font-size: 14px;
+            padding: 10px 0;
+        }
+
+        /* Event tags display */
+        .event-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 5px;
+        }
+
+        .event-tag {
+            font-size: 12px;
+            padding: 2px 8px;
+            background-color: #3498db;
+            color: white;
+            border-radius: 10px;
+            display: inline-block;
+        }
+
+        /* Filter styles */
+        .tag-filter-container {
+            margin-top: 10px;
+        }
+
+        .tag-filter-label {
+            font-size: 14px;
+            margin-bottom: 5px;
+            display: block;
+        }
+
+        .tag-filter-dropdown {
+            width: 100%;
+            padding: 5px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        /* Event note styles */
+        .event-note {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-left: 3px solid #3498db;
+            border-radius: 0 4px 4px 0;
+        }
+
+            .event-note p {
+                margin: 0 0 5px 0;
+            }
+
+        /* Mobile responsiveness */
+        @media (max-width: 768px) {
+            .modal-content {
+                width: 95%;
+                margin: 15% auto;
+            }
+
+            .tag-selector {
+                max-height: 150px;
+                overflow-y: auto;
+            }
+
+            .event-tags {
+                flex-wrap: wrap;
+                margin-top: 8px;
+            }
+
+            .tag-filter-container {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <h1>CCTV Alert Monitor</h1>
+                <div id="unacknowledged-counter" class="unacknowledged-counter">0</div>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link active">Monitoring</a>
+                <a href="/statistics.html" class="nav-link">Statistics</a>
+                <span id="admin-links"></span>
+            </div>
+            <button id="refresh-btn">Check for New Alerts</button>
+            <div id="user-info-container" class="user-info-container">
+                <!-- User info will be populated dynamically -->
+            </div>
+        </header>
+
+        <main>
+            <div class="events-container">
+                <div class="events-header">
+                    <h2>Alarm Events</h2>
+                    <div class="events-actions">
+                        <div class="events-filter">
+                            <label>
+                                <input type="checkbox" id="filter-unacknowledged">
+                                Show only unacknowledged
+                            </label>
+                            <label>
+                                <input type="checkbox" id="filter-late-response">
+                                Show only late responses
+                            </label>
+                            <!-- Tag filter will be added here dynamically -->
+                        </div>
+                    </div>
+                </div>
+                <div id="events-list" class="events-list">
+                    <!-- Event items will be populated dynamically -->
+                    <div class="loading">Loading events...</div>
+                </div>
+            </div>
+
+            <div class="image-container">
+                <h2>Alert Image</h2>
+                <div id="image-viewer">
+                    <img id="alert-image" src="" alt="No image selected">
+                    <div id="image-info" class="image-info">
+                        <p>Select an event to view image</p>
+                    </div>
+                    <div id="event-video-container" class="event-video-container">
+                        <!-- Video content will be dynamically added here -->
+                    </div>
+                    <div id="acknowledge-container"></div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>CCTV Email Monitor - v0.3</p>
+            <div class="keyboard-shortcuts">
+                <button id="show-shortcuts" class="text-button">Keyboard shortcuts</button>
+                <div id="shortcuts-panel" class="shortcuts-panel" style="display: none;">
+                    <h3>Keyboard Shortcuts</h3>
+                    <ul>
+                        <li><kbd>↑</kbd> / <kbd>↓</kbd> - Navigate events</li>
+                        <li><kbd>A</kbd> - Acknowledge selected event</li>
+                        <li><kbd>R</kbd> - Refresh events</li>
+                        <li><kbd>F</kbd> - Toggle unacknowledged filter</li>
+                        <li><kbd>L</kbd> - Toggle late response filter</li>
+                        <li><kbd>T</kbd> - Open tag filter dropdown</li>
+                        <li><kbd>Esc</kbd> - Close panels/modals</li>
+                    </ul>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Sound notification (hidden) -->
+    <audio id="notification-sound" preload="auto">
+        <source src="https://assets.mixkit.co/active_storage/sfx/3005/3005.wav" type="audio/wav">
+        <!-- Fallback sound if the first one doesn't load -->
+        <source src="https://assets.mixkit.co/active_storage/sfx/922/922.wav" type="audio/wav">
+    </audio>
+
+    <!-- Acknowledge Event Modal -->
+    <div id="acknowledge-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Acknowledge Event</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div id="acknowledge-error" class="error-message"></div>
+            <form id="acknowledge-form">
+                <input type="hidden" id="ack-event-id">
+                <div class="form-group">
+                    <label for="ack-note">Add a note (optional):</label>
+                    <textarea id="ack-note" rows="3" placeholder="Enter any relevant information about this event..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Tags:</label>
+                    <div id="tag-container" class="tag-selector">
+                        <!-- Tags will be populated dynamically -->
+                        <div class="loading-tags">Loading tags...</div>
+                    </div>
+                </div>
+                <div class="form-buttons">
+                    <button type="button" id="ack-cancel-btn" class="secondary-button">Cancel</button>
+                    <button type="submit" class="primary-button">Acknowledge</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Video Modal -->
+    <div id="video-modal" class="modal">
+        <div class="modal-content video-modal-content">
+            <div class="modal-header">
+                <h2 id="video-modal-title">Security Video</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <!-- Improved video wrapper with better containment -->
+                <div class="video-wrapper">
+                    <video id="modal-video-player" controls preload="metadata">
+                        <source src="" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+                <div class="video-info" id="modal-video-info">
+                    <span id="modal-time-difference"></span>
+                    <a id="modal-download-link" href="" download class="video-download-link" title="Download Video">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Download
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

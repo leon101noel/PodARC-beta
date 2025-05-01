@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Management - CCTV Alert Monitor</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="user-management-styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <h1>User Management</h1>
+                <a href="/" class="back-link">Back to Monitoring</a>
+            </div>
+            <div class="user-info">
+                <span id="current-user"></span>
+                <button id="logout-btn" class="logout-button">Logout</button>
+            </div>
+        </header>
+
+        <main>
+            <div class="users-container">
+                <div class="section-header">
+                    <h2>Users</h2>
+                    <button id="add-user-btn" class="primary-button">Add New User</button>
+                </div>
+
+                <div class="users-list-container">
+                    <table id="users-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Username</th>
+                                <th>Name</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-list">
+                            <!-- User rows will be populated here -->
+                        </tbody>
+                    </table>
+                    <div id="loading-message" class="loading">Loading users...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add/Edit User Modal -->
+    <div id="user-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Add New User</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div id="modal-error" class="error-message"></div>
+            <form id="user-form">
+                <input type="hidden" id="user-id">
+                <div class="form-group">
+                    <label for="user-username">Username</label>
+                    <input type="text" id="user-username" required>
+                </div>
+                <div class="form-group">
+                    <label for="user-password">Password</label>
+                    <input type="password" id="user-password">
+                    <div class="password-note" id="password-note">Leave blank to keep current password</div>
+                </div>
+                <div class="form-group">
+                    <label for="user-name">Name</label>
+                    <input type="text" id="user-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="user-role">Role</label>
+                    <select id="user-role">
+                        <option value="user">User</option>
+                        <option value="admin">Administrator</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="user-active" class="checkbox-label">
+                        <input type="checkbox" id="user-active" checked>
+                        Active
+                    </label>
+                </div>
+                <div class="form-buttons">
+                    <button type="button" id="cancel-btn" class="secondary-button">Cancel</button>
+                    <button type="submit" id="save-btn" class="primary-button">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content confirm-modal-content">
+            <div class="modal-header">
+                <h2>Confirm Delete</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <p>Are you sure you want to delete this user? This action cannot be undone.</p>
+            <div class="form-buttons">
+                <button id="confirm-cancel" class="secondary-button">Cancel</button>
+                <button id="confirm-delete" class="danger-button">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Check if the user is logged in
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/login';
+                return;
+            }
+
+            // Display current user
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const currentUserElement = document.getElementById('current-user');
+            if (user && user.name) {
+                currentUserElement.textContent = `${user.name} (${user.role})`;
+            }
+
+            // Check if user is admin
+            if (user.role !== 'admin') {
+                // Redirect non-admin users
+                window.location.href = '/';
+                return;
+            }
+
+            // Elements
+            const usersTable = document.getElementById('users-table');
+            const usersList = document.getElementById('users-list');
+            const loadingMessage = document.getElementById('loading-message');
+            const addUserBtn = document.getElementById('add-user-btn');
+            const userModal = document.getElementById('user-modal');
+            const modalTitle = document.getElementById('modal-title');
+            const userForm = document.getElementById('user-form');
+            const modalError = document.getElementById('modal-error');
+            const cancelBtn = document.getElementById('cancel-btn');
+            const closeModalButtons = document.querySelectorAll('.close-modal');
+            const logoutBtn = document.getElementById('logout-btn');
+            const confirmModal = document.getElementById('confirm-modal');
+            const confirmDelete = document.getElementById('confirm-delete');
+            const confirmCancel = document.getElementById('confirm-cancel');
+            const passwordNote = document.getElementById('password-note');
+
+            // Form fields
+            const userId = document.getElementById('user-id');
+            const userUsername = document.getElementById('user-username');
+            const userPassword = document.getElementById('user-password');
+            const userName = document.getElementById('user-name');
+            const userRole = document.getElementById('user-role');
+            const userActive = document.getElementById('user-active');
+
+            // Set up event listeners
+            addUserBtn.addEventListener('click', openAddUserModal);
+            userForm.addEventListener('submit', saveUser);
+            cancelBtn.addEventListener('click', closeUserModal);
+            closeModalButtons.forEach(btn => btn.addEventListener('click', closeAllModals));
+            logoutBtn.addEventListener('click', logout);
+            confirmCancel.addEventListener('click', closeConfirmModal);
+
+            // Fetch and display users
+            fetchUsers();
+
+            // Add user modal
+            function openAddUserModal() {
+                // Reset form
+                userForm.reset();
+                userId.value = '';
+                userPassword.required = true;
+                passwordNote.style.display = 'none';
+                modalTitle.textContent = 'Add New User';
+                modalError.textContent = '';
+                userModal.style.display = 'block';
+            }
+
+            // Edit user modal
+            function openEditUserModal(user) {
+                // Fill form with user data
+                userId.value = user.id;
+                userUsername.value = user.username;
+                userPassword.value = '';
+                userPassword.required = false;
+                passwordNote.style.display = 'block';
+                userName.value = user.name;
+                userRole.value = user.role;
+                userActive.checked = user.isActive;
+
+                modalTitle.textContent = 'Edit User';
+                modalError.textContent = '';
+                userModal.style.display = 'block';
+            }
+
+            // Close user modal
+            function closeUserModal() {
+                userModal.style.display = 'none';
+            }
+
+            // Close all modals
+            function closeAllModals() {
+                userModal.style.display = 'none';
+                confirmModal.style.display = 'none';
+            }
+
+            // Close confirm modal
+            function closeConfirmModal() {
+                confirmModal.style.display = 'none';
+            }
+
+            // Open confirm delete modal
+            function openConfirmDeleteModal(userId) {
+                // Set up the delete function
+                confirmDelete.onclick = function () {
+                    deleteUser(userId);
+                };
+
+                confirmModal.style.display = 'block';
+            }
+
+            // Save user
+            async function saveUser(e) {
+                e.preventDefault();
+
+                // Get form data
+                const data = {
+                    username: userUsername.value,
+                    name: userName.value,
+                    role: userRole.value,
+                    isActive: userActive.checked
+                };
+
+                // Add password if provided
+                if (userPassword.value) {
+                    data.password = userPassword.value;
+                }
+
+                try {
+                    let url = '/api/auth/users';
+                    let method = 'POST';
+
+                    // If editing an existing user
+                    if (userId.value) {
+                        url = `/api/auth/users/${userId.value}`;
+                        method = 'PUT';
+                    }
+
+                    const response = await fetch(url, {
+                        method,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-auth-token': token
+                        },
+                        body: JSON.stringify(data)
+                    });
+
+                    const result = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(result.error || 'Failed to save user');
+                    }
+
+                    // Close modal and refresh users
+                    closeUserModal();
+                    fetchUsers();
+                } catch (error) {
+                    modalError.textContent = error.message;
+                }
+            }
+
+            // Delete user
+            async function deleteUser(userId) {
+                try {
+                    const response = await fetch(`/api/auth/users/${userId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'x-auth-token': token
+                        }
+                    });
+
+                    const result = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(result.error || 'Failed to delete user');
+                    }
+
+                    // Close modal and refresh users
+                    closeConfirmModal();
+                    fetchUsers();
+                } catch (error) {
+                    alert('Error: ' + error.message);
+                }
+            }
+
+            // Fetch users
+            async function fetchUsers() {
+                try {
+                    loadingMessage.style.display = 'block';
+                    usersTable.style.display = 'none';
+
+                    const response = await fetch('/api/auth/users', {
+                        headers: {
+                            'x-auth-token': token
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch users');
+                    }
+
+                    const users = await response.json();
+                    renderUsers(users);
+
+                    loadingMessage.style.display = 'none';
+                    usersTable.style.display = 'table';
+                } catch (error) {
+                    loadingMessage.textContent = 'Error loading users: ' + error.message;
+                }
+            }
+
+            // Render users list
+            function renderUsers(users) {
+                usersList.innerHTML = '';
+
+                users.forEach(user => {
+                    const tr = document.createElement('tr');
+
+                    // Don't allow editing the first admin account
+                    const canDelete = user.id !== 1;
+
+                    tr.innerHTML = `
+                            <td>${user.id}</td>
+                            <td>${user.username}</td>
+                            <td>${user.name}</td>
+                            <td>${user.role}</td>
+                            <td><span class="status-badge ${user.isActive ? 'active' : 'inactive'}">${user.isActive ? 'Active' : 'Inactive'}</span></td>
+                            <td class="actions">
+                                <button class="edit-btn" data-id="${user.id}">Edit</button>
+                                ${canDelete ? `<button class="delete-btn" data-id="${user.id}">Delete</button>` : ''}
+                            </td>
+                        `;
+
+                    usersList.appendChild(tr);
+                });
+
+                // Add event listeners to action buttons
+                document.querySelectorAll('.edit-btn').forEach(btn => {
+                    btn.addEventListener('click', function () {
+                        const userId = parseInt(this.getAttribute('data-id'));
+                        const user = users.find(u => u.id === userId);
+                        if (user) {
+                            openEditUserModal(user);
+                        }
+                    });
+                });
+
+                document.querySelectorAll('.delete-btn').forEach(btn => {
+                    btn.addEventListener('click', function () {
+                        const userId = parseInt(this.getAttribute('data-id'));
+                        openConfirmDeleteModal(userId);
+                    });
+                });
+            }
+
+            // Logout function
+            async function logout() {
+                try {
+                    // Call logout endpoint
+                    await fetch('/api/auth/logout', {
+                        method: 'POST',
+                        headers: {
+                            'x-auth-token': token
+                        }
+                    });
+
+                    // Clear local storage
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+
+                    // Redirect to login page
+                    window.location.href = '/login';
+                } catch (error) {
+                    console.error('Logout error:', error);
+
+                    // Even if the server-side logout fails, clear local storage and redirect
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    window.location.href = '/login';
+                }
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Site Management - CCTV Alert Monitor</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="user-management-styles.css">
+    <style>
+        .sites-container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            padding: 20px;
+            width: 100%;
+        }
+
+        .site-description {
+            margin-bottom: 20px;
+            color: #555;
+        }
+
+        .sites-list {
+            margin-bottom: 20px;
+        }
+
+        .site-item {
+            margin-bottom: 15px;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            border-left: 4px solid #3498db;
+        }
+
+        .site-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .site-prefix {
+            background-color: #3498db;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .site-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .site-body {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .site-info {
+            margin-bottom: 10px;
+        }
+
+        .keyholders-list {
+            grid-column: span 2;
+            margin-top: 10px;
+        }
+
+        .keyholders-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+            .keyholders-table th,
+            .keyholders-table td {
+                padding: 8px;
+                text-align: left;
+                border-bottom: 1px solid #eee;
+            }
+
+            .keyholders-table th {
+                background-color: #f2f2f2;
+                font-weight: 600;
+            }
+
+        /* Site Form Styles */
+        .keyholder-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .address-field textarea {
+            height: 80px;
+            resize: vertical;
+        }
+
+        .notification {
+            background-color: #2ecc71;
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error-notification {
+            background-color: #e74c3c;
+        }
+
+        @media (max-width: 768px) {
+            .site-body {
+                grid-template-columns: 1fr;
+            }
+
+            .keyholders-list {
+                grid-column: span 1;
+            }
+
+            .keyholder-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <h1>Site Management</h1>
+                <a href="/" class="back-link">Back to Monitoring</a>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link">Monitoring</a>
+                <a href="/statistics.html" class="nav-link">Statistics</a>
+                <a href="/settings" class="nav-link">Tags</a>
+                <a href="/sites.html" class="nav-link active">Sites</a>
+                <a href="/users" class="nav-link">Users</a>
+            </div>
+            <div class="user-info">
+                <span id="current-user"></span>
+                <button id="logout-btn" class="logout-button">Logout</button>
+            </div>
+        </header>
+
+        <main>
+            <div class="sites-container">
+                <div class="section-header">
+                    <h2>Site Management</h2>
+                    <button id="add-site-btn" class="primary-button">Add New Site</button>
+                </div>
+
+                <div id="notification" class="notification"></div>
+
+                <div class="site-description">
+                    <p>Configure the sites that your cameras monitor. Each site should have a unique prefix that matches the beginning of your camera names. For example, if your cameras are named "POD1-01", "POD1-02", you would use "POD1" as the prefix.</p>
+                </div>
+
+                <div id="sites-list" class="sites-list">
+                    <!-- Sites will be listed here -->
+                    <div class="loading">Loading sites...</div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>CCTV Email Monitor - v0.3</p>
+        </footer>
+    </div>
+
+    <!-- Add/Edit Site Modal -->
+    <div id="site-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Add New Site</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div id="modal-error" class="error-message"></div>
+            <form id="site-form">
+                <input type="hidden" id="site-id">
+                <div class="form-group">
+                    <label for="site-prefix">Prefix</label>
+                    <input type="text" id="site-prefix" required>
+                    <div class="help-text">This prefix will be used to match cameras to this site. For example, if your cameras are named "POD1-01", use "POD1" as the prefix.</div>
+                </div>
+                <div class="form-group">
+                    <label for="site-name">Site Name</label>
+                    <input type="text" id="site-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="site-address">Address</label>
+                    <textarea id="site-address" class="address-field" required></textarea>
+                </div>
+
+                <h3>Keyholders</h3>
+                <div class="keyholders-form">
+                    <div class="keyholder-row">
+                        <div class="form-group">
+                            <label for="keyholder-name-1">Keyholder 1 Name</label>
+                            <input type="text" id="keyholder-name-1">
+                        </div>
+                        <div class="form-group">
+                            <label for="keyholder-contact-1">Keyholder 1 Contact</label>
+                            <input type="text" id="keyholder-contact-1">
+                        </div>
+                    </div>
+                    <div class="keyholder-row">
+                        <div class="form-group">
+                            <label for="keyholder-name-2">Keyholder 2 Name</label>
+                            <input type="text" id="keyholder-name-2">
+                        </div>
+                        <div class="form-group">
+                            <label for="keyholder-contact-2">Keyholder 2 Contact</label>
+                            <input type="text" id="keyholder-contact-2">
+                        </div>
+                    </div>
+                    <div class="keyholder-row">
+                        <div class="form-group">
+                            <label for="keyholder-name-3">Keyholder 3 Name</label>
+                            <input type="text" id="keyholder-name-3">
+                        </div>
+                        <div class="form-group">
+                            <label for="keyholder-contact-3">Keyholder 3 Contact</label>
+                            <input type="text" id="keyholder-contact-3">
+                        </div>
+                    </div>
+                    <div class="keyholder-row">
+                        <div class="form-group">
+                            <label for="keyholder-name-4">Keyholder 4 Name</label>
+                            <input type="text" id="keyholder-name-4">
+                        </div>
+                        <div class="form-group">
+                            <label for="keyholder-contact-4">Keyholder 4 Contact</label>
+                            <input type="text" id="keyholder-contact-4">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-buttons">
+                    <button type="button" id="cancel-btn" class="secondary-button">Cancel</button>
+                    <button type="submit" id="save-btn" class="primary-button">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content confirm-modal-content">
+            <div class="modal-header">
+                <h2>Confirm Delete</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <p>Are you sure you want to delete this site? This action cannot be undone.</p>
+            <div class="form-buttons">
+                <button id="confirm-cancel" class="secondary-button">Cancel</button>
+                <button id="confirm-delete" class="danger-button">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Check if the user is logged in
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/login';
+                return;
+            }
+
+            // Display current user
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const currentUserElement = document.getElementById('current-user');
+            if (user && user.name) {
+                currentUserElement.textContent = `${user.name} (${user.role})`;
+            }
+
+            // Check if user is admin
+            if (user.role !== 'admin') {
+                // Redirect non-admin users
+                window.location.href = '/';
+                return;
+            }
+
+            // Elements
+            const sitesList = document.getElementById('sites-list');
+            const addSiteBtn = document.getElementById('add-site-btn');
+            const siteModal = document.getElementById('site-modal');
+            const modalTitle = document.getElementById('modal-title');
+            const siteForm = document.getElementById('site-form');
+            const modalError = document.getElementById('modal-error');
+            const cancelBtn = document.getElementById('cancel-btn');
+            const closeModalButtons = document.querySelectorAll('.close-modal');
+            const logoutBtn = document.getElementById('logout-btn');
+            const confirmModal = document.getElementById('confirm-modal');
+            const confirmDelete = document.getElementById('confirm-delete');
+            const confirmCancel = document.getElementById('confirm-cancel');
+            const notification = document.getElementById('notification');
+
+            // Form fields
+            const siteId = document.getElementById('site-id');
+            const sitePrefix = document.getElementById('site-prefix');
+            const siteName = document.getElementById('site-name');
+            const siteAddress = document.getElementById('site-address');
+
+            // Set up event listeners
+            addSiteBtn.addEventListener('click', openAddSiteModal);
+            siteForm.addEventListener('submit', saveSite);
+            cancelBtn.addEventListener('click', closeSiteModal);
+            closeModalButtons.forEach(btn => btn.addEventListener('click', closeAllModals));
+            logoutBtn.addEventListener('click', logout);
+            confirmCancel.addEventListener('click', closeConfirmModal);
+
+            // Fetch and display sites
+            fetchSites();
+
+            // Add site modal
+            function openAddSiteModal() {
+                // Reset form
+                siteForm.reset();
+                siteId.value = '';
+                modalTitle.textContent = 'Add New Site';
+                modalError.textContent = '';
+                siteModal.style.display = 'block';
+            }
+
+            // Edit site modal
+            function openEditSiteModal(site) {
+                // Fill form with site data
+                siteId.value = site.id;
+                sitePrefix.value = site.prefix;
+                siteName.value = site.name;
+                siteAddress.value = site.address;
+
+                // Fill keyholder data
+                for (let i = 0; i < 4; i++) {
+                    const keyholder = site.keyholders[i] || { name: '', contact: '' };
+                    document.getElementById(`keyholder-name-${i + 1}`).value = keyholder.name;
+                    document.getElementById(`keyholder-contact-${i + 1}`).value = keyholder.contact;
+                }
+
+                modalTitle.textContent = 'Edit Site';
+                modalError.textContent = '';
+                siteModal.style.display = 'block';
+            }
+
+            // Close site modal
+            function closeSiteModal() {
+                siteModal.style.display = 'none';
+            }
+
+            // Close all modals
+            function closeAllModals() {
+                siteModal.style.display = 'none';
+                confirmModal.style.display = 'none';
+            }
+
+            // Close confirm modal
+            function closeConfirmModal() {
+                confirmModal.style.display = 'none';
+            }
+
+            // Open confirm delete modal
+            function openConfirmDeleteModal(siteId) {
+                // Set up the delete function
+                confirmDelete.onclick = function () {
+                    deleteSite(siteId);
+                };
+
+                confirmModal.style.display = 'block';
+            }
+
+            // Save site
+            async function saveSite(e) {
+                e.preventDefault();
+
+                // Get keyholder data
+                const keyholders = [];
+                for (let i = 1; i <= 4; i++) {
+                    keyholders.push({
+                        name: document.getElementById(`keyholder-name-${i}`).value || '',
+                        contact: document.getElementById(`keyholder-contact-${i}`).value || ''
+                    });
+                }
+
+                // Get form data
+                const data = {
+                    prefix: sitePrefix.value,
+                    name: siteName.value,
+                    address: siteAddress.value,
+                    keyholders
+                };
+
+                try {
+                    let url = '/api/sites';
+                    let method = 'POST';
+
+                    // If editing an existing site
+                    if (siteId.value) {
+                        url = `/api/sites/${siteId.value}`;
+                        method = 'PUT';
+                    }
+
+                    const response = await fetch(url, {
+                        method,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-auth-token': token
+                        },
+                        body: JSON.stringify(data)
+                    });
+
+                    const result = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(result.error || 'Failed to save site');
+                    }
+
+                    // Close modal and refresh sites
+                    closeSiteModal();
+                    fetchSites();
+                    showNotification(siteId.value ? 'Site updated successfully' : 'Site added successfully');
+                } catch (error) {
+                    modalError.textContent = error.message;
+                }
+            }
+
+            // Delete site
+            async function deleteSite(siteId) {
+                try {
+                    const response = await fetch(`/api/sites/${siteId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'x-auth-token': token
+                        }
+                    });
+
+                    const result = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(result.error || 'Failed to delete site');
+                    }
+
+                    // Close modal and refresh sites
+                    closeConfirmModal();
+                    fetchSites();
+                    showNotification('Site deleted successfully');
+                } catch (error) {
+                    showNotification('Error: ' + error.message, true);
+                }
+            }
+
+            // Fetch sites
+            async function fetchSites() {
+                try {
+                    sitesList.innerHTML = '<div class="loading">Loading sites...</div>';
+
+                    const response = await fetch('/api/sites', {
+                        headers: {
+                            'x-auth-token': token
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch sites');
+                    }
+
+                    const sites = await response.json();
+                    renderSites(sites);
+                } catch (error) {
+                    sitesList.innerHTML = '<div class="error">Error loading sites: ' + error.message + '</div>';
+                }
+            }
+
+            // Render sites list
+            function renderSites(sites) {
+                if (sites.length === 0) {
+                    sitesList.innerHTML = '<div class="no-data">No sites configured. Add your first site using the button above.</div>';
+                    return;
+                }
+
+                let html = '';
+                sites.forEach(site => {
+                    // Generate keyholder rows
+                    let keyholderRows = '';
+                    site.keyholders.forEach(keyholder => {
+                        if (keyholder.name || keyholder.contact) {
+                            keyholderRows += `
+                                <tr>
+                                    <td>${keyholder.name}</td>
+                                    <td>${keyholder.contact}</td>
+                                </tr>
+                            `;
+                        }
+                    });
+
+                    if (!keyholderRows) {
+                        keyholderRows = '<tr><td colspan="2">No keyholders specified</td></tr>';
+                    }
+
+                    html += `
+                        <div class="site-item">
+                            <div class="site-header">
+                                <div>
+                                    <h3>${site.name} <span class="site-prefix">${site.prefix}</span></h3>
+                                </div>
+                                <div class="site-actions">
+                                    <button class="edit-btn" data-id="${site.id}">Edit</button>
+                                    <button class="delete-btn" data-id="${site.id}">Delete</button>
+                                </div>
+                            </div>
+                            <div class="site-body">
+                                <div class="site-info">
+                                    <strong>Address:</strong><br>
+                                    ${site.address.replace(/\n/g, '<br>')}
+                                </div>
+                                <div class="keyholders-list">
+                                    <strong>Keyholders:</strong>
+                                    <table class="keyholders-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Contact</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${keyholderRows}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                sitesList.innerHTML = html;
+
+                // Add event listeners to action buttons
+                document.querySelectorAll('.edit-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const siteId = parseInt(this.getAttribute('data-id'));
+                        const site = sites.find(s => s.id === siteId);
+                        if (site) {
+                            openEditSiteModal(site);
+                        }
+                    });
+                });
+
+                document.querySelectorAll('.delete-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const siteId = parseInt(this.getAttribute('data-id'));
+                        openConfirmDeleteModal(siteId);
+                    });
+                });
+            }
+
+            // Show notification
+            function showNotification(message, isError = false) {
+                notification.textContent = message;
+                notification.style.display = 'block';
+
+                if (isError) {
+                    notification.classList.add('error-notification');
+                } else {
+                    notification.classList.remove('error-notification');
+                }
+
+                // Hide after 5 seconds
+                setTimeout(() => {
+                    notification.style.display = 'none';
+                }, 5000);
+            }
+
+            // Logout function
+            async function logout() {
+                try {
+                    await fetch('/api/auth/logout', {
+                        method: 'POST',
+                        headers: {
+                            'x-auth-token': token
+                        }
+                    });
+
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    window.location.href = '/login';
+                } catch (error) {
+                    console.error('Logout error:', error);
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    window.location.href = '/login';
+                }
+            }
+        });
+    </script>
+</body>
+</html>

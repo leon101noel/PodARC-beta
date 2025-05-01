@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - CCTV Alert Monitor</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="user-management-styles.css">
+    <style>
+        .tags-container {
+            margin-top: 20px;
+        }
+
+        .tag-description {
+            margin-bottom: 20px;
+            color: #555;
+        }
+
+        .tags-list {
+            margin-bottom: 20px;
+        }
+
+        .tag-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+
+        .tag-input {
+            flex-grow: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .remove-tag {
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 12px;
+            margin-left: 10px;
+            cursor: pointer;
+        }
+
+            .remove-tag:hover {
+                background-color: #c0392b;
+            }
+
+        .add-tag-form {
+            display: flex;
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+
+        .add-tag-input {
+            flex-grow: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+
+        .notification {
+            background-color: #2ecc71;
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error-notification {
+            background-color: #e74c3c;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <h1>Settings</h1>
+                <a href="/" class="back-link">Back to Monitoring</a>
+            </div>
+            <div class="user-info">
+                <span id="current-user"></span>
+                <button id="logout-btn" class="logout-button">Logout</button>
+            </div>
+        </header>
+
+        <main>
+            <div class="users-container">
+                <div class="section-header">
+                    <h2>Tag Management</h2>
+                </div>
+
+                <div class="tags-container">
+                    <div id="notification" class="notification"></div>
+
+                    <div class="tag-description">
+                        <p>Configure the tags that operators can use when acknowledging events. These tags will be available in the acknowledge dialog and can be used for filtering and statistics.</p>
+                    </div>
+
+                    <div id="tags-list" class="tags-list">
+                        <!-- Tags will be listed here -->
+                        <div class="loading">Loading tags...</div>
+                    </div>
+
+                    <div class="add-tag-form">
+                        <input type="text" id="new-tag-input" class="add-tag-input" placeholder="Enter new tag name">
+                        <button id="add-tag-btn" class="primary-button">Add Tag</button>
+                    </div>
+
+                    <div class="form-buttons">
+                        <button id="save-tags-btn" class="primary-button">Save Changes</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>CCTV Email Monitor - v0.3</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if the user is logged in
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/login';
+                return;
+            }
+
+            // Display current user
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const currentUserElement = document.getElementById('current-user');
+            if (user && user.name) {
+                currentUserElement.textContent = `${user.name} (${user.role})`;
+            }
+
+            // Check if user is admin
+            if (user.role !== 'admin') {
+                // Redirect non-admin users
+                window.location.href = '/';
+                return;
+            }
+
+            // Elements
+            const tagsList = document.getElementById('tags-list');
+            const addTagBtn = document.getElementById('add-tag-btn');
+            const newTagInput = document.getElementById('new-tag-input');
+            const saveTagsBtn = document.getElementById('save-tags-btn');
+            const notification = document.getElementById('notification');
+            const logoutBtn = document.getElementById('logout-btn');
+
+            // Tags array
+            let tags = [];
+
+            // Fetch tags from server
+            fetchTags();
+
+            // Add event listeners
+            addTagBtn.addEventListener('click', addNewTag);
+            saveTagsBtn.addEventListener('click', saveTags);
+            logoutBtn.addEventListener('click', logout);
+
+            // Fetch tags from server
+            async function fetchTags() {
+                try {
+                    const response = await fetch('/api/settings/tags', {
+                        headers: {
+                            'x-auth-token': token
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch tags');
+                    }
+
+                    tags = await response.json();
+                    renderTags();
+                } catch (error) {
+                    console.error('Error fetching tags:', error);
+                    showNotification('Error loading tags: ' + error.message, true);
+                }
+            }
+
+            // Render tags list
+            function renderTags() {
+                if (!tags || tags.length === 0) {
+                    tagsList.innerHTML = '<div class="no-data">No tags configured. Add some tags below.</div>';
+                    return;
+                }
+
+                let tagsHtml = '';
+                tags.forEach((tag, index) => {
+                    tagsHtml += `
+                        <div class="tag-item">
+                            <input type="text" class="tag-input" value="${tag}" data-index="${index}">
+                            <button class="remove-tag" data-index="${index}">Remove</button>
+                        </div>
+                    `;
+                });
+
+                tagsList.innerHTML = tagsHtml;
+
+                // Add event listeners to remove buttons
+                document.querySelectorAll('.remove-tag').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const index = parseInt(this.getAttribute('data-index'));
+                        removeTag(index);
+                    });
+                });
+
+                // Add event listeners to tag inputs for changes
+                document.querySelectorAll('.tag-input').forEach(input => {
+                    input.addEventListener('change', function() {
+                        const index = parseInt(this.getAttribute('data-index'));
+                        updateTag(index, this.value);
+                    });
+                });
+            }
+
+            // Add new tag
+            function addNewTag() {
+                const newTag = newTagInput.value.trim();
+
+                if (!newTag) {
+                    showNotification('Please enter a tag name', true);
+                    return;
+                }
+
+                // Check if tag already exists
+                if (tags.includes(newTag)) {
+                    showNotification('This tag already exists', true);
+                    return;
+                }
+
+                // Add to tags array
+                tags.push(newTag);
+
+                // Clear input
+                newTagInput.value = '';
+
+                // Update display
+                renderTags();
+
+                showNotification('Tag added. Don\'t forget to save your changes!');
+            }
+
+            // Remove tag
+            function removeTag(index) {
+                tags.splice(index, 1);
+                renderTags();
+                showNotification('Tag removed. Don\'t forget to save your changes!');
+            }
+
+            // Update tag
+            function updateTag(index, newValue) {
+                if (!newValue.trim()) {
+                    showNotification('Tag name cannot be empty', true);
+                    renderTags(); // Reset the display
+                    return;
+                }
+
+                // Check if tag already exists elsewhere in the array
+                const existingIndex = tags.findIndex(tag => tag === newValue.trim());
+                if (existingIndex !== -1 && existingIndex !== index) {
+                    showNotification('This tag already exists', true);
+                    renderTags(); // Reset the display
+                    return;
+                }
+
+                tags[index] = newValue.trim();
+                showNotification('Tag updated. Don\'t forget to save your changes!');
+            }
+
+            // Save tags to server
+            async function saveTags() {
+                try {
+                    const response = await fetch('/api/settings/tags', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-auth-token': token
+                        },
+                        body: JSON.stringify({ tags })
+                    });
+
+                    if (!response.ok) {
+                        const data = await response.json();
+                        throw new Error(data.error || 'Failed to save tags');
+                    }
+
+                    showNotification('Tags saved successfully');
+                } catch (error) {
+                    console.error('Error saving tags:', error);
+                    showNotification('Error saving tags: ' + error.message, true);
+                }
+            }
+
+            // Show notification
+            function showNotification(message, isError = false) {
+                notification.textContent = message;
+                notification.style.display = 'block';
+
+                if (isError) {
+                    notification.classList.add('error-notification');
+                } else {
+                    notification.classList.remove('error-notification');
+                }
+
+                // Hide after 5 seconds
+                setTimeout(() => {
+                    notification.style.display = 'none';
+                }, 5000);
+            }
+
+            // Logout function
+            async function logout() {
+                try {
+                    await fetch('/api/auth/logout', {
+                        method: 'POST',
+                        headers: {
+                            'x-auth-token': token
+                        }
+                    });
+
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    window.location.href = '/login';
+                } catch (error) {
+                    console.error('Logout error:', error);
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    window.location.href = '/login';
+                }
+            }
+        });
+    </script>
+</body>
+</html>

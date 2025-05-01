@@ -1,0 +1,50 @@
+[
+  {
+    "id": 1,
+    "prefix": "POD1",
+    "name": "Guys Plant Hire",
+    "address": "Longmeadow Ind Estate, Ringwood Road, Wimborne, BH21 6RD",
+    "keyholders": [
+      {
+        "name": "Leon Cole",
+        "contact": "07951294776"
+      },
+      {
+        "name": "Tom Howard",
+        "contact": "01202 123456"
+      },
+      {
+        "name": "",
+        "contact": ""
+      },
+      {
+        "name": "",
+        "contact": ""
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "prefix": "POD2",
+    "name": "The Alpha Test Site",
+    "address": "The Simpli-Fi Office, Three Cross, BH21 6RD",
+    "keyholders": [
+      {
+        "name": "Leon Cole",
+        "contact": "01202123456"
+      },
+      {
+        "name": "Tom Howard",
+        "contact": "01202123456"
+      },
+      {
+        "name": "Brian",
+        "contact": "4736282982"
+      },
+      {
+        "name": "",
+        "contact": ""
+      }
+    ]
+  }
+]
