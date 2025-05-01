@@ -22,7 +22,7 @@ class EventRetentionService {
         this.retentionDays = options.retentionDays || 7;
         this.eventsFilePath = options.eventsFilePath || path.join(__dirname, 'events-data.json');
         this.imagesBasePath = options.imagesBasePath || path.join(__dirname, 'public');
-        this.videosBasePath = options.videosBasePath || path.join(__dirname, 'public');
+        this.videosBasePath = options.videosBasePath || path.join(__dirname);
     }
 
     /**
@@ -55,11 +55,36 @@ class EventRetentionService {
     }
 
     /**
+     * Try to delete a file with more robust error handling
+     * @param {string} filePath - Path to the file to delete
+     * @returns {Promise<boolean>} - True if deleted or doesn't exist, false if error
+     */
+    async tryDeleteFile(filePath) {
+        try {
+            if (fs.existsSync(filePath)) {
+                await unlinkAsync(filePath);
+                return true;
+            } else {
+                return false; // File doesn't exist, not an error
+            }
+        } catch (error) {
+            console.error(`Error deleting file ${filePath}:`, error);
+            return false;
+        }
+    }
+
+    /**
      * Run cleanup process to remove old events
      * @returns {Object} Cleanup statistics
      */
     async cleanupOldEvents() {
+        console.log('==== PATH DEBUGGING ====');
+        console.log('videosBasePath =', this.videosBasePath);
+        console.log('imagesBasePath =', this.imagesBasePath);
+        console.log('__dirname =', __dirname);
+        console.log('Current working directory =', process.cwd());
         console.log('========================');
+
         console.log(`Starting cleanup of events older than ${this.retentionDays} days...`);
         console.log('========================');
 
@@ -139,61 +164,117 @@ class EventRetentionService {
                 // Try to delete associated video file using the saved path if available
                 if (event.videoPath) {
                     try {
-                        console.log(`Event has a stored video path: ${event.videoPath}`);
+                        console.log(`\n==== VIDEO DELETION for Event ${event.id} ====`);
+                        console.log(`Stored video path: "${event.videoPath}"`);
 
-                        // Try multiple path formats to handle different path configurations
-                        const pathFormats = [];
-
-                        // Handle relative path by joining with base path
-                        // Remove the leading slash from videoPath if it exists
+                        // Remove leading /videos/ if present
                         const relativePath = event.videoPath.replace(/^\/videos\//, '');
+                        console.log(`Relative path: "${relativePath}"`);
 
-                        // Format 1: with public/videos
-                        pathFormats.push({
-                            name: 'public/videos format',
-                            path: path.join(this.videosBasePath, 'public/videos', relativePath)
-                        });
+                        // Possible path combinations to try
+                        // This covers a wide range of possible path configurations
+                        const pathsToTry = [
+                            // Format 1: basePath/public/videos/relativePath
+                            path.join(this.videosBasePath, 'public', 'videos', relativePath),
 
-                        // Format 2: with videos but without public
-                        pathFormats.push({
-                            name: 'videos format (no public)',
-                            path: path.join(this.videosBasePath, 'videos', relativePath)
-                        });
+                            // Format 2: basePath/videos/relativePath
+                            path.join(this.videosBasePath, 'videos', relativePath),
 
-                        // Format 3: direct relative path
-                        pathFormats.push({
-                            name: 'direct relative path',
-                            path: path.join(this.videosBasePath, relativePath)
-                        });
+                            // Format 3: basePath/relativePath
+                            path.join(this.videosBasePath, relativePath),
 
-                        // Try each path format
-                        let videoDeleted = false;
+                            // Format 4: dirname/public/videos/relativePath
+                            path.join(__dirname, 'public', 'videos', relativePath),
 
-                        for (const format of pathFormats) {
-                            console.log(`Trying ${format.name}: ${format.path}`);
+                            // Format 5: dirname/videos/relativePath
+                            path.join(__dirname, 'videos', relativePath),
 
-                            if (fs.existsSync(format.path)) {
+                            // Format 6: cwd/public/videos/relativePath
+                            path.join(process.cwd(), 'public', 'videos', relativePath),
+
+                            // Format 7: cwd/videos/relativePath
+                            path.join(process.cwd(), 'videos', relativePath),
+
+                            // Format 8: direct as stored (may be absolute)
+                            event.videoPath,
+
+                            // Format 9: relative from current directory
+                            path.join(process.cwd(), event.videoPath.replace(/^\//, ''))
+                        ];
+
+                        // Try to extract path components for more precise matching
+                        const pathMatch = relativePath.match(/^(\d{4})\/(\d{2})\/(\d{2})\/(.+)$/);
+                        if (pathMatch) {
+                            const [_, year, month, day, filename] = pathMatch;
+                            console.log(`Extracted path components: year=${year}, month=${month}, day=${day}, filename=${filename}`);
+
+                            // Add paths with exact year/month/day structure
+                            pathsToTry.push(
+                                // Format 10: basePath/year/month/day/filename
+                                path.join(this.videosBasePath, year, month, day, filename),
+
+                                // Format 11: dirname/year/month/day/filename
+                                path.join(__dirname, year, month, day, filename),
+
+                                // Format 12: cwd/year/month/day/filename
+                                path.join(process.cwd(), year, month, day, filename)
+                            );
+                        }
+
+                        console.log(`Will try ${pathsToTry.length} different path combinations`);
+
+                        // Try each path
+                        let deleted = false;
+                        let foundPath = null;
+
+                        for (let i = 0; i < pathsToTry.length; i++) {
+                            const tryPath = pathsToTry[i];
+                            console.log(`Trying path ${i + 1}: "${tryPath}"`);
+
+                            if (fs.existsSync(tryPath)) {
+                                console.log(`✅ Video file found at: "${tryPath}"`);
+                                foundPath = tryPath;
+
                                 try {
-                                    await unlinkAsync(format.path);
+                                    // Get file info
+                                    const stats = fs.statSync(tryPath);
+                                    console.log(`File size: ${stats.size} bytes`);
+                                    console.log(`Last modified: ${stats.mtime}`);
+
+                                    // Try to delete
+                                    await unlinkAsync(tryPath);
+                                    console.log(`✅ Successfully deleted video file: "${tryPath}"`);
+                                    deleted = true;
                                     stats.deletedVideos++;
-                                    console.log(`✅ Successfully deleted video (${format.name}): ${format.path}`);
-                                    videoDeleted = true;
-                                    break; // Stop trying other formats if deletion succeeded
-                                } catch (deleteErr) {
-                                    console.error(`❌ Error deleting video at ${format.path}:`, deleteErr);
+                                    break;
+                                } catch (deleteError) {
+                                    console.error(`❌ Error deleting file: ${deleteError.message}`);
+
+                                    // Special case: check if it's a permission issue
+                                    if (deleteError.code === 'EACCES') {
+                                        console.error('Permission denied! Check file system permissions.');
+                                        stats.errors.push(`Permission denied when trying to delete video for event ${event.id}`);
+                                    }
                                 }
                             } else {
-                                console.log(`❌ Video file does not exist at ${format.name}: ${format.path}`);
+                                console.log(`❌ File not found at this path`);
                             }
                         }
 
-                        if (!videoDeleted) {
-                            console.log(`⚠️ Could not delete video at any path format for event ${event.id}`);
-                            stats.errors.push(`Failed to find video file for event ${event.id} at any expected path`);
+                        if (!deleted) {
+                            if (foundPath) {
+                                console.log(`⚠️ File was found at "${foundPath}" but could not be deleted`);
+                                stats.errors.push(`Failed to delete video for event ${event.id} due to permissions or other error`);
+                            } else {
+                                console.log(`⚠️ Video file not found at any of the attempted paths`);
+                                stats.errors.push(`Failed to find video file for event ${event.id} at any expected path`);
+                            }
                         }
+
+                        console.log('==== END VIDEO DELETION ====\n');
                     } catch (videoErr) {
-                        console.error(`Error processing video path for event ${event.id}:`, videoErr);
-                        stats.errors.push(`Failed to process video for event ${event.id}: ${videoErr.message}`);
+                        console.error(`Error processing video for event ${event.id}:`, videoErr);
+                        stats.errors.push(`Error processing video for event ${event.id}: ${videoErr.message}`);
                     }
                 }
                 // Fallback to the original matching method if no direct video path is saved
@@ -277,114 +358,130 @@ class EventRetentionService {
                             const { year, month, day } = dateToCheck;
                             console.log(`Checking directory for ${year}-${month}-${day}`);
 
-                            // Construct the video directory path
-                            const videoDir = path.join(this.videosBasePath, 'public', 'videos', year, month, day);
-                            console.log(`Looking in directory: ${videoDir}`);
+                            // Try each possible videos directory path
+                            const videoDirPaths = [
+                                path.join(this.videosBasePath, 'public', 'videos', year, month, day),
+                                path.join(this.videosBasePath, 'videos', year, month, day),
+                                path.join(__dirname, 'public', 'videos', year, month, day),
+                                path.join(__dirname, 'videos', year, month, day),
+                                path.join(process.cwd(), 'public', 'videos', year, month, day),
+                                path.join(process.cwd(), 'videos', year, month, day),
+                                path.join(this.videosBasePath, year, month, day),
+                                path.join(__dirname, year, month, day),
+                                path.join(process.cwd(), year, month, day)
+                            ];
 
-                            // Check if directory exists
-                            if (fs.existsSync(videoDir)) {
-                                console.log(`Directory exists: ${videoDir}`);
+                            // Try each directory path
+                            for (const videoDir of videoDirPaths) {
+                                console.log(`Looking in directory: ${videoDir}`);
 
-                                // Read all files in the directory
-                                const files = fs.readdirSync(videoDir);
-                                console.log(`Found ${files.length} total files in directory`);
+                                // Check if directory exists
+                                if (fs.existsSync(videoDir)) {
+                                    console.log(`Directory exists: ${videoDir}`);
 
-                                // Filter for files that match the camera pattern
-                                const cameraFiles = files.filter(file =>
-                                    file.startsWith(event.camera) && file.toLowerCase().endsWith('.mp4')
-                                );
+                                    // Read all files in the directory
+                                    const files = fs.readdirSync(videoDir);
+                                    console.log(`Found ${files.length} total files in directory`);
 
-                                console.log(`Found ${cameraFiles.length} potential video files for camera ${event.camera}`);
+                                    // Filter for files that match the camera pattern
+                                    const cameraFiles = files.filter(file =>
+                                        file.startsWith(event.camera) && file.toLowerCase().endsWith('.mp4')
+                                    );
 
-                                // Check each potential video file
-                                for (const file of cameraFiles) {
-                                    console.log(`Checking file: ${file}`);
+                                    console.log(`Found ${cameraFiles.length} potential video files for camera ${event.camera}`);
 
-                                    // Extract timestamp from filename
-                                    // Format: POD1_00_20250424153423.mp4
-                                    const match = file.match(/(\d{14})/);
-                                    if (match) {
-                                        const timestamp = match[1];
-                                        console.log(`Found timestamp in filename: ${timestamp}`);
+                                    // Check each potential video file
+                                    for (const file of cameraFiles) {
+                                        console.log(`Checking file: ${file}`);
 
-                                        // Correctly parse the timestamp
-                                        const fileYear = parseInt(timestamp.substring(0, 4));
-                                        const fileMonth = parseInt(timestamp.substring(4, 2)) - 1; // JS months are 0-based
-                                        const fileDay = parseInt(timestamp.substring(6, 2));
-                                        const fileHour = parseInt(timestamp.substring(8, 2));
-                                        const fileMinute = parseInt(timestamp.substring(10, 2));
-                                        const fileSecond = parseInt(timestamp.substring(12, 2));
+                                        // Extract timestamp from filename
+                                        // Format: POD1_00_20250424153423.mp4
+                                        const match = file.match(/(\d{14})/);
+                                        if (match) {
+                                            const timestamp = match[1];
+                                            console.log(`Found timestamp in filename: ${timestamp}`);
 
-                                        // Create a Date object from the filename timestamp
-                                        try {
-                                            const fileDate = new Date(
-                                                fileYear,
-                                                fileMonth,
-                                                fileDay,
-                                                fileHour,
-                                                fileMinute,
-                                                fileSecond
-                                            );
+                                            // Correctly parse the timestamp
+                                            const fileYear = parseInt(timestamp.substring(0, 4));
+                                            const fileMonth = parseInt(timestamp.substring(4, 2)) - 1; // JS months are 0-based
+                                            const fileDay = parseInt(timestamp.substring(6, 2));
+                                            const fileHour = parseInt(timestamp.substring(8, 2));
+                                            const fileMinute = parseInt(timestamp.substring(10, 2));
+                                            const fileSecond = parseInt(timestamp.substring(12, 2));
 
-                                            console.log(`Video date: ${fileDate.toISOString()}`);
+                                            // Create a Date object from the filename timestamp
+                                            try {
+                                                const fileDate = new Date(
+                                                    fileYear,
+                                                    fileMonth,
+                                                    fileDay,
+                                                    fileHour,
+                                                    fileMinute,
+                                                    fileSecond
+                                                );
 
-                                            const fileTime = fileDate.getTime();
+                                                console.log(`Video date: ${fileDate.toISOString()}`);
 
-                                            // Try both compare times with a larger window
-                                            const timeWindowMs = 180 * 1000; // 3 minutes
+                                                const fileTime = fileDate.getTime();
 
-                                            // Calculate time differences
-                                            const timeDiff = Math.abs(fileTime - eventTime);
-                                            const altTimeDiff = alternateCompareTime ?
-                                                Math.abs(fileTime - alternateCompareTime) : Infinity;
+                                                // Try both compare times with a larger window
+                                                const timeWindowMs = 180 * 1000; // 3 minutes
 
-                                            console.log(`Time diff with event date: ${timeDiff}ms`);
-                                            if (alternateCompareTime) {
-                                                console.log(`Time diff with image timestamp: ${altTimeDiff}ms`);
-                                            }
+                                                // Calculate time differences
+                                                const timeDiff = Math.abs(fileTime - eventTime);
+                                                const altTimeDiff = alternateCompareTime ?
+                                                    Math.abs(fileTime - alternateCompareTime) : Infinity;
 
-                                            // Use the best match between the two compare times
-                                            const bestTimeDiff = Math.min(timeDiff, altTimeDiff);
-                                            console.log(`Best time diff: ${bestTimeDiff}ms (window: ${timeWindowMs}ms)`);
-
-                                            if (bestTimeDiff <= timeWindowMs) {
-                                                const fullVideoPath = path.join(videoDir, file);
-                                                console.log(`✅ Found matching video: ${fullVideoPath} (time diff: ${bestTimeDiff}ms)`);
-
-                                                // Before deleting, store the video path in the event for future reference
-                                                const videoPathForStorage = `/videos/${year}/${month}/${day}/${file}`;
-                                                console.log(`This path would be stored as: ${videoPathForStorage}`);
-
-                                                try {
-                                                    await unlinkAsync(fullVideoPath);
-                                                    stats.deletedVideos++;
-                                                    console.log(`✅ Successfully deleted video: ${fullVideoPath}`);
-                                                    foundVideo = true;
-                                                    break; // Stop checking more files
-                                                } catch (unlinkErr) {
-                                                    // Don't fail if video doesn't exist
-                                                    if (unlinkErr.code !== 'ENOENT') {
-                                                        console.error(`❌ Error deleting video file ${fullVideoPath}:`, unlinkErr);
-                                                        stats.errors.push(`Failed to delete video for event ${event.id}: ${unlinkErr.message}`);
-                                                    } else {
-                                                        console.log(`❌ Video file appears to have been deleted already: ${fullVideoPath}`);
-                                                    }
+                                                console.log(`Time diff with event date: ${timeDiff}ms`);
+                                                if (alternateCompareTime) {
+                                                    console.log(`Time diff with image timestamp: ${altTimeDiff}ms`);
                                                 }
-                                            } else {
-                                                console.log(`❌ Time difference too large: ${bestTimeDiff}ms > ${timeWindowMs}ms window`);
+
+                                                // Use the best match between the two compare times
+                                                const bestTimeDiff = Math.min(timeDiff, altTimeDiff);
+                                                console.log(`Best time diff: ${bestTimeDiff}ms (window: ${timeWindowMs}ms)`);
+
+                                                if (bestTimeDiff <= timeWindowMs) {
+                                                    const fullVideoPath = path.join(videoDir, file);
+                                                    console.log(`✅ Found matching video: ${fullVideoPath} (time diff: ${bestTimeDiff}ms)`);
+
+                                                    // Before deleting, store the video path in the event for future reference
+                                                    const videoPathForStorage = `/videos/${year}/${month}/${day}/${file}`;
+                                                    console.log(`This path would be stored as: ${videoPathForStorage}`);
+
+                                                    try {
+                                                        await unlinkAsync(fullVideoPath);
+                                                        stats.deletedVideos++;
+                                                        console.log(`✅ Successfully deleted video: ${fullVideoPath}`);
+                                                        foundVideo = true;
+                                                        break; // Stop checking more files
+                                                    } catch (unlinkErr) {
+                                                        // Don't fail if video doesn't exist
+                                                        if (unlinkErr.code !== 'ENOENT') {
+                                                            console.error(`❌ Error deleting video file ${fullVideoPath}:`, unlinkErr);
+                                                            stats.errors.push(`Failed to delete video for event ${event.id}: ${unlinkErr.message}`);
+                                                        } else {
+                                                            console.log(`❌ Video file appears to have been deleted already: ${fullVideoPath}`);
+                                                        }
+                                                    }
+                                                } else {
+                                                    console.log(`❌ Time difference too large: ${bestTimeDiff}ms > ${timeWindowMs}ms window`);
+                                                }
+                                            } catch (dateErr) {
+                                                console.error(`Error parsing date from filename ${file}:`, dateErr);
                                             }
-                                        } catch (dateErr) {
-                                            console.error(`Error parsing date from filename ${file}:`, dateErr);
+                                        } else {
+                                            console.log(`❌ No timestamp pattern found in filename: ${file}`);
                                         }
-                                    } else {
-                                        console.log(`❌ No timestamp pattern found in filename: ${file}`);
                                     }
+
+                                    if (foundVideo) break; // Stop checking more directories in this date
+                                } else {
+                                    console.log(`❌ Video directory does not exist: ${videoDir}`);
                                 }
-                            } else {
-                                console.log(`❌ Video directory does not exist: ${videoDir}`);
                             }
 
-                            // If we found and deleted a video, stop checking other directories
+                            // If we found and deleted a video, stop checking other dates
                             if (foundVideo) {
                                 console.log(`Found and deleted a video, stopping search`);
                                 break;
