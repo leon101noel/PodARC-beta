@@ -361,7 +361,7 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
-/public/images
+#/public/images
 /public/videos/2025/04/24
 /public/videos/2025/04/28
 /public/videos/2025/04/30
