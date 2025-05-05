@@ -2,7 +2,7 @@
   {
     "id": 1,
     "username": "admin",
-    "password": "$2a$10$v18Owaj2BJhPg5YLNT7Bl.7fT0zYf6BvKJ5Ao.E3Vlc54BQLxUNH.",
+    "password": "$2a$10$mU3inn.MW0SM2nSB2JAQ/.F387w8DbGAynJOzmkoXDQ3WX02oTine",
     "name": "Administrator",
     "role": "admin",
     "isActive": true
@@ -20,6 +20,14 @@
     "username": "tom",
     "password": "$2a$10$c0kYj5Vq7PPbpYms4I4xWOl8n2oOnj2n/CUenJu5amBjBl678cDGG",
     "name": "Tom Howard",
+    "role": "user",
+    "isActive": true
+  },
+  {
+    "id": 4,
+    "username": "allied",
+    "password": "$2a$10$tMJih3J8pclHKZtP3bgRV.IpQ5UCbmmhBfodH99m5C7mD4kBMl5Ly",
+    "name": "Allied Security",
     "role": "user",
     "isActive": true
   }

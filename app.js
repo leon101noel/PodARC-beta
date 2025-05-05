@@ -1235,7 +1235,7 @@ app.listen(PORT, () => {
         retentionDays: config.retentionDays,
         eventsFilePath: path.join(__dirname, 'events-data.json'),
         imagesBasePath: path.join(__dirname, 'public'),
-        videosBasePath: path.join(__dirname)
+        videosBasePath: path.join(__dirname, 'public')
     });
 
     // Set up scheduled cleanup - run every day at 3 AM

@@ -54,6 +54,9 @@ document.addEventListener('DOMContentLoaded', function () {
             <span class="current-user">Logged in as: ${user.name || 'Unknown'}</span>
             <div class="user-actions">
                 ${user.role === 'admin' ? '<a href="/users" class="admin-link">User Management</a>' : ''}
+                ${user.role === 'admin' ? '<a href="/settings" class="admin-link">Settings</a>' : ''}
+                ${user.role === 'admin' ? '<a href="/sites.html" class="admin-link">Sites</a>' : ''}
+                ${user.role === 'admin' ? '<a href="/retention.html" class="admin-link">Retention</a>' : ''}
                 <button id="logout-btn" class="logout-btn">Logout</button>
             </div>
         `;

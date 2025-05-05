@@ -10,7 +10,7 @@ const EventRetentionService = require('../event-retention');
 const retentionService = new EventRetentionService({
     eventsFilePath: path.join(__dirname, '..', 'events-data.json'),
     imagesBasePath: path.join(__dirname, '..', 'public'),
-    videosBasePath: path.join(__dirname, '..')
+    videosBasePath: path.join(__dirname, '..', 'public') // Correctly points to the parent directory of videos
 });
 
 // @route   POST /api/retention/cleanup
@@ -153,7 +153,7 @@ router.get('/debug/video-match/:eventId', adminMiddleware, async (req, res) => {
 
             // Construct the video directory path
             const videoDirRelative = path.join('videos', year, month, day);
-            const videoDir = path.join(retentionService.videosBasePath, 'public', videoDirRelative);
+            const videoDir = path.join(retentionService.videosBasePath, videoDirRelative);
 
             const dirInfo = {
                 directory: videoDirRelative,
@@ -269,7 +269,7 @@ router.get('/debug/video-match/:eventId', adminMiddleware, async (req, res) => {
 // @access  Admin
 router.get('/debug/directory-structure', adminMiddleware, (req, res) => {
     try {
-        const videosBasePath = path.join(retentionService.videosBasePath, 'public', 'videos');
+        const videosBasePath = path.join(retentionService.videosBasePath, 'videos');
 
         // Check if base directory exists
         if (!fs.existsSync(videosBasePath)) {

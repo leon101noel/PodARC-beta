@@ -25,7 +25,6 @@
     const ackCancelBtn = document.getElementById('ack-cancel-btn');
     const acknowledgeError = document.getElementById('acknowledge-error');
     const closeModalButtons = document.querySelectorAll('.close-modal');
-    const adminLinks = document.getElementById('admin-links');
 
     // New elements for event locking
     const ackLockEvent = document.getElementById('ack-lock-event');
@@ -54,15 +53,7 @@
 
     setupUserInfo(currentUser);
 
-    // Update admin links if user is admin
-    if (currentUser && currentUser.role === 'admin' && adminLinks) {
-        adminLinks.innerHTML = `
-            <a href="/users" class="nav-link">Users</a>
-            <a href="/settings" class="nav-link">Settings</a>
-            <a href="/sites.html" class="nav-link">Sites</a>
-            <a href="/retention.html" class="nav-link">Retention</a>
-        `;
-    }
+    // Admin links are now handled in the user actions section
 
     // Check if there's an event ID in the URL (for direct linking)
     const urlParams = new URLSearchParams(window.location.search);
@@ -1484,6 +1475,7 @@
             <div class="user-actions">
                 ${user.role === 'admin' ? '<a href="/users" class="admin-link">User Management</a>' : ''}
                 ${user.role === 'admin' ? '<a href="/settings" class="admin-link">Settings</a>' : ''}
+                ${user.role === 'admin' ? '<a href="/sites.html" class="admin-link">Sites</a>' : ''}
                 ${user.role === 'admin' ? '<a href="/retention.html" class="admin-link">Retention</a>' : ''}
                 <button id="logout-btn" class="logout-btn">Logout</button>
             </div>

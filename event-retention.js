@@ -22,7 +22,16 @@ class EventRetentionService {
         this.retentionDays = options.retentionDays || 7;
         this.eventsFilePath = options.eventsFilePath || path.join(__dirname, 'events-data.json');
         this.imagesBasePath = options.imagesBasePath || path.join(__dirname, 'public');
-        this.videosBasePath = options.videosBasePath || path.join(__dirname);
+        
+        // Make sure videosBasePath is correctly pointing to the parent directory of 'videos'
+        // This handles both cases: if already set to 'public' or if set to 'public/videos'
+        this.videosBasePath = options.videosBasePath || path.join(__dirname, 'public');
+        
+        // Log the paths for debugging
+        console.log('EventRetentionService initialized with:');
+        console.log('- eventsFilePath:', this.eventsFilePath);
+        console.log('- imagesBasePath:', this.imagesBasePath);
+        console.log('- videosBasePath:', this.videosBasePath);
     }
 
     /**
@@ -174,31 +183,30 @@ class EventRetentionService {
                         // Possible path combinations to try
                         // This covers a wide range of possible path configurations
                         const pathsToTry = [
-                            // Format 1: basePath/public/videos/relativePath
-                            path.join(this.videosBasePath, 'public', 'videos', relativePath),
-
-                            // Format 2: basePath/videos/relativePath
+                            // Format 1: public/videos/relativePath (for this.videosBasePath pointing to 'public')
                             path.join(this.videosBasePath, 'videos', relativePath),
-
-                            // Format 3: basePath/relativePath
+                            
+                            // Format 2: videosBasePath/relativePath (for this.videosBasePath pointing to 'public/videos')
                             path.join(this.videosBasePath, relativePath),
+                            
+                            // Format 3: videos/relativePath (if videosBasePath already has 'public' in it)
+                            path.join(this.videosBasePath.replace(/\/public$/, ''), 'videos', relativePath),
+                            
+                            // Format 4: videosBasePath directly to the file
+                            path.join(this.videosBasePath, event.videoPath.replace(/^\/videos\//, '')),
 
-                            // Format 4: dirname/public/videos/relativePath
+                            // Try with __dirname variations
                             path.join(__dirname, 'public', 'videos', relativePath),
-
-                            // Format 5: dirname/videos/relativePath
                             path.join(__dirname, 'videos', relativePath),
-
-                            // Format 6: cwd/public/videos/relativePath
+                            
+                            // Try with current working directory variations
                             path.join(process.cwd(), 'public', 'videos', relativePath),
-
-                            // Format 7: cwd/videos/relativePath
                             path.join(process.cwd(), 'videos', relativePath),
 
-                            // Format 8: direct as stored (may be absolute)
+                            // Format: direct as stored (may be absolute)
                             event.videoPath,
 
-                            // Format 9: relative from current directory
+                            // Format: relative from current directory
                             path.join(process.cwd(), event.videoPath.replace(/^\//, ''))
                         ];
 
@@ -210,18 +218,54 @@ class EventRetentionService {
 
                             // Add paths with exact year/month/day structure
                             pathsToTry.push(
-                                // Format 10: basePath/year/month/day/filename
+                                // Format 10: videosBasePath/videos/year/month/day/filename
+                                path.join(this.videosBasePath, 'videos', year, month, day, filename),
+                                
+                                // Format 11: videosBasePath/year/month/day/filename
                                 path.join(this.videosBasePath, year, month, day, filename),
 
-                                // Format 11: dirname/year/month/day/filename
+                                // Format 12: dirname/public/videos/year/month/day/filename
+                                path.join(__dirname, 'public', 'videos', year, month, day, filename),
+                                
+                                // Format 13: dirname/videos/year/month/day/filename
+                                path.join(__dirname, 'videos', year, month, day, filename),
+                                
+                                // Format 14: dirname/year/month/day/filename
                                 path.join(__dirname, year, month, day, filename),
 
-                                // Format 12: cwd/year/month/day/filename
+                                // Format 15: cwd/public/videos/year/month/day/filename
+                                path.join(process.cwd(), 'public', 'videos', year, month, day, filename),
+                                
+                                // Format 16: cwd/videos/year/month/day/filename
+                                path.join(process.cwd(), 'videos', year, month, day, filename),
+                                
+                                // Format 17: cwd/year/month/day/filename
+                                path.join(process.cwd(), year, month, day, filename)
+                            );
+                        }
+                        
+                        // Also try parsing directly from the videoPath (backup method)
+                        const directPathMatch = event.videoPath.match(/\/videos\/(\d{4})\/(\d{2})\/(\d{2})\/(.+)$/);
+                        if (directPathMatch && !pathMatch) {
+                            const [_, year, month, day, filename] = directPathMatch;
+                            console.log(`Extracted direct path components: year=${year}, month=${month}, day=${day}, filename=${filename}`);
+                            
+                            pathsToTry.push(
+                                // Add the same patterns as above with these components
+                                path.join(this.videosBasePath, 'videos', year, month, day, filename),
+                                path.join(this.videosBasePath, year, month, day, filename),
+                                path.join(__dirname, 'public', 'videos', year, month, day, filename),
+                                path.join(__dirname, 'videos', year, month, day, filename),
+                                path.join(__dirname, year, month, day, filename),
+                                path.join(process.cwd(), 'public', 'videos', year, month, day, filename),
+                                path.join(process.cwd(), 'videos', year, month, day, filename),
                                 path.join(process.cwd(), year, month, day, filename)
                             );
                         }
 
                         console.log(`Will try ${pathsToTry.length} different path combinations`);
+                        console.log('DIAGNOSTIC: All paths to try:');
+                        pathsToTry.forEach((p, i) => console.log(`  Path ${i+1}: ${p}`));
 
                         // Try each path
                         let deleted = false;
@@ -237,18 +281,26 @@ class EventRetentionService {
 
                                 try {
                                     // Get file info
-                                    const stats = fs.statSync(tryPath);
-                                    console.log(`File size: ${stats.size} bytes`);
-                                    console.log(`Last modified: ${stats.mtime}`);
+                                    const fileStats = fs.statSync(tryPath);
+                                    console.log(`File size: ${fileStats.size} bytes`);
+                                    console.log(`Last modified: ${fileStats.mtime}`);
+                                    console.log(`File permissions: ${fileStats.mode.toString(8)}`);
+                                    console.log(`File owner: ${fileStats.uid}, group: ${fileStats.gid}`);
 
                                     // Try to delete
                                     await unlinkAsync(tryPath);
                                     console.log(`✅ Successfully deleted video file: "${tryPath}"`);
                                     deleted = true;
+                                    
+                                    // Increment the deletion counter
                                     stats.deletedVideos++;
+                                    console.log(`Updated stats.deletedVideos to ${stats.deletedVideos}`);
+                                    
                                     break;
                                 } catch (deleteError) {
                                     console.error(`❌ Error deleting file: ${deleteError.message}`);
+                                    console.error(`Error code: ${deleteError.code}`);
+                                    console.error(`Error stack: ${deleteError.stack}`);
 
                                     // Special case: check if it's a permission issue
                                     if (deleteError.code === 'EACCES') {
@@ -338,11 +390,13 @@ class EventRetentionService {
                                 // Extract timestamp components
                                 const dateTimePart = imageTimestamp.substr(0, 14); // 20250424153418
                                 const year = parseInt(dateTimePart.substr(0, 4));
-                                const month = parseInt(dateTimePart.substr(4, 2)) - 1; // JS months are 0-based
-                                const day = parseInt(dateTimePart.substr(6, 2));
-                                const hour = parseInt(dateTimePart.substr(8, 2));
-                                const minute = parseInt(dateTimePart.substr(10, 2));
-                                const second = parseInt(dateTimePart.substr(12, 2));
+                                const month = parseInt(dateTimePart.substr(4, 6)) - 1; // JS months are 0-based
+                                const day = parseInt(dateTimePart.substr(6, 8));
+                                const hour = parseInt(dateTimePart.substr(8, 10));
+                                const minute = parseInt(dateTimePart.substr(10, 12));
+                                const second = parseInt(dateTimePart.substr(12, 14));
+                                
+                                console.log(`Parsed image timestamp components: Y=${year}, M=${month+1}, D=${day}, h=${hour}, m=${minute}, s=${second}`);
 
                                 const compareDate = new Date(year, month, day, hour, minute, second);
                                 alternateCompareTime = compareDate.getTime();
@@ -403,11 +457,13 @@ class EventRetentionService {
 
                                             // Correctly parse the timestamp
                                             const fileYear = parseInt(timestamp.substring(0, 4));
-                                            const fileMonth = parseInt(timestamp.substring(4, 2)) - 1; // JS months are 0-based
-                                            const fileDay = parseInt(timestamp.substring(6, 2));
-                                            const fileHour = parseInt(timestamp.substring(8, 2));
-                                            const fileMinute = parseInt(timestamp.substring(10, 2));
-                                            const fileSecond = parseInt(timestamp.substring(12, 2));
+                                            const fileMonth = parseInt(timestamp.substring(4, 6)) - 1; // JS months are 0-based
+                                            const fileDay = parseInt(timestamp.substring(6, 8));
+                                            const fileHour = parseInt(timestamp.substring(8, 10));
+                                            const fileMinute = parseInt(timestamp.substring(10, 12));
+                                            const fileSecond = parseInt(timestamp.substring(12, 14));
+                                            
+                                            console.log(`Parsed timestamp components: Y=${fileYear}, M=${fileMonth+1}, D=${fileDay}, h=${fileHour}, m=${fileMinute}, s=${fileSecond}`);
 
                                             // Create a Date object from the filename timestamp
                                             try {
@@ -453,6 +509,7 @@ class EventRetentionService {
                                                         await unlinkAsync(fullVideoPath);
                                                         stats.deletedVideos++;
                                                         console.log(`✅ Successfully deleted video: ${fullVideoPath}`);
+                                                        console.log(`Updated stats.deletedVideos to ${stats.deletedVideos}`);
                                                         foundVideo = true;
                                                         break; // Stop checking more files
                                                     } catch (unlinkErr) {
