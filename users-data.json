@@ -28,7 +28,7 @@
     "username": "allied",
     "password": "$2a$10$tMJih3J8pclHKZtP3bgRV.IpQ5UCbmmhBfodH99m5C7mD4kBMl5Ly",
     "name": "Allied Security",
-    "role": "user",
+    "role": "operator",
     "isActive": true
   }
 ]

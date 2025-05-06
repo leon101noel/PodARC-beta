@@ -17,6 +17,8 @@ const { initSmtpServer, processEmail } = require('./smtp-server');
 // Add retention routes and service
 const retentionRoutes = require('./routes/retention');
 const EventRetentionService = require('./event-retention');
+// Add operator logs routes
+const operatorLogsRoutes = require('./routes/operator-logs');
 // Add cron for scheduled tasks
 const CronJob = require('cron').CronJob;
 
@@ -70,6 +72,9 @@ app.use('/api/sites', sitesRoutes);
 
 // Add retention routes
 app.use('/api/retention', retentionRoutes);
+
+// Add operator logs routes
+app.use('/api/operator-logs', operatorLogsRoutes);
 
 // Data file path
 const dataFilePath = path.join(__dirname, 'events-data.json');

@@ -1530,14 +1530,80 @@
                 ${user.role === 'admin' ? '<a href="/settings" class="admin-link">Settings</a>' : ''}
                 ${user.role === 'admin' ? '<a href="/sites.html" class="admin-link">Sites</a>' : ''}
                 ${user.role === 'admin' ? '<a href="/retention.html" class="admin-link">Retention</a>' : ''}
+                ${user.role === 'admin' ? '<a href="/operator-logs.html" class="admin-link">Operator Logs</a>' : ''}
                 <button id="logout-btn" class="logout-btn">Logout</button>
             </div>
         `;
         console.log('Added user info container to header');
 
+        // Initialize modal event listeners once to prevent duplication
+        const logoutConfirmModal = document.getElementById('logout-confirm-modal');
+        const logoutCancelBtn = document.getElementById('logout-cancel-btn');
+        const logoutConfirmBtn = document.getElementById('logout-confirm-btn');
+        const modalCloseBtn = logoutConfirmModal.querySelector('.close-modal');
+            
+        // Set up the cancel button event listener
+        logoutCancelBtn.addEventListener('click', function() {
+            logoutConfirmModal.style.display = 'none';
+        });
+            
+        // Set up the close button event listener
+        modalCloseBtn.addEventListener('click', function() {
+            logoutConfirmModal.style.display = 'none';
+        });
+            
         // Add logout functionality
         document.getElementById('logout-btn').addEventListener('click', async function () {
             console.log('Logout button clicked');
+            
+            // Check if user is an operator
+            if (user.role === 'operator') {
+                // Get the count of unacknowledged events
+                const unacknowledgedCount = events.filter(event => !event.acknowledged).length;
+                
+                // Set the unacknowledged count
+                const unacknowledgedCountText = document.getElementById('unacknowledged-count-text');
+                unacknowledgedCountText.textContent = unacknowledgedCount;
+                
+                // Show the modal
+                logoutConfirmModal.style.display = 'block';
+                
+                // Define the confirm action with the current unacknowledged count
+                logoutConfirmBtn.onclick = async function() {
+                    // First log the operator logout with unacknowledged count
+                    try {
+                        const response = await fetch('/api/operator-logs', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-auth-token': token
+                            },
+                            body: JSON.stringify({ unacknowledgedCount })
+                        });
+                        
+                        if (response.ok) {
+                            console.log('Successfully logged operator logout');
+                            // Proceed with logout only after successfully logging
+                            performLogout();
+                        } else {
+                            console.error('Error logging operator logout: Server returned', response.status);
+                            // Still perform logout even if logging fails
+                            performLogout();
+                        }
+                    } catch (error) {
+                        console.error('Error logging operator logout:', error);
+                        // Still perform logout even if logging fails
+                        performLogout();
+                    }
+                };
+            } else {
+                // Regular logout for non-operators
+                performLogout();
+            }
+        });
+        
+        // Actual logout functionality
+        async function performLogout() {
             try {
                 // Call logout endpoint
                 await fetch('/api/auth/logout', {
@@ -1562,7 +1628,7 @@
                 localStorage.removeItem('user');
                 window.location.href = '/login';
             }
-        });
+        }
     }
 
     // Keyboard shortcuts

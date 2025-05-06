@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Operator Logs - CCTV Alert Monitor</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .logs-container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .logs-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .logs-table th, .logs-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .logs-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+
+        .logs-table tr:hover {
+            background-color: #f5f5f5;
+        }
+
+        .unacknowledged-count {
+            font-weight: bold;
+            color: #e74c3c;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .export-button {
+            padding: 8px 16px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .export-button:hover {
+            background-color: #2980b9;
+        }
+
+        .no-logs {
+            text-align: center;
+            padding: 30px;
+            color: #666;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <h1>Operator Logout Logs</h1>
+                <a href="/" class="back-link">Back to Monitoring</a>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link">Monitoring</a>
+                <a href="/statistics.html" class="nav-link">Statistics</a>
+                <a href="/users" class="nav-link">User Management</a>
+                <a href="/operator-logs.html" class="nav-link active">Operator Logs</a>
+            </div>
+            <div class="user-info">
+                <span id="current-user"></span>
+                <button id="logout-btn" class="logout-button">Logout</button>
+            </div>
+        </header>
+
+        <main>
+            <div class="logs-container">
+                <div class="section-header">
+                    <h2>Operator Logout Records</h2>
+                    <button id="export-csv-btn" class="export-button">Export to CSV</button>
+                </div>
+
+                <div class="logs-list-container">
+                    <table id="logs-table" class="logs-table">
+                        <thead>
+                            <tr>
+                                <th>Operator</th>
+                                <th>Time of Logout</th>
+                                <th>Unacknowledged Events</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logs-list">
+                            <!-- Log rows will be populated here -->
+                        </tbody>
+                    </table>
+                    <div id="loading-message" class="loading">Loading logs...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Check if the user is logged in
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/login';
+                return;
+            }
+
+            // Display current user
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const currentUserElement = document.getElementById('current-user');
+            if (user && user.name) {
+                currentUserElement.textContent = `${user.name} (${user.role})`;
+            }
+
+            // Check if user is admin
+            if (user.role !== 'admin') {
+                // Redirect non-admin users
+                window.location.href = '/';
+                return;
+            }
+
+            // Elements
+            const logsTable = document.getElementById('logs-table');
+            const logsList = document.getElementById('logs-list');
+            const loadingMessage = document.getElementById('loading-message');
+            const exportCsvBtn = document.getElementById('export-csv-btn');
+            const logoutBtn = document.getElementById('logout-btn');
+
+            // Set up event listeners
+            exportCsvBtn.addEventListener('click', exportLogs);
+            logoutBtn.addEventListener('click', logout);
+
+            // Fetch and display logs
+            fetchLogs();
+
+            // Fetch logs
+            async function fetchLogs() {
+                try {
+                    loadingMessage.style.display = 'block';
+                    logsTable.style.display = 'none';
+
+                    const response = await fetch('/api/operator-logs', {
+                        headers: {
+                            'x-auth-token': token
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch logs');
+                    }
+
+                    const logs = await response.json();
+                    renderLogs(logs);
+
+                    loadingMessage.style.display = 'none';
+                    logsTable.style.display = 'table';
+                } catch (error) {
+                    loadingMessage.textContent = 'Error loading logs: ' + error.message;
+                }
+            }
+
+            // Render logs list
+            function renderLogs(logs) {
+                logsList.innerHTML = '';
+
+                if (logs.length === 0) {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td colspan="3" class="no-logs">No operator logout logs found</td>`;
+                    logsList.appendChild(tr);
+                    return;
+                }
+
+                // Sort logs by timestamp (newest first)
+                logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+                logs.forEach(log => {
+                    const tr = document.createElement('tr');
+                    const timestamp = new Date(log.timestamp);
+                    const formattedDate = timestamp.toLocaleString();
+
+                    tr.innerHTML = `
+                        <td>${log.name} (${log.username})</td>
+                        <td>${formattedDate}</td>
+                        <td class="unacknowledged-count">${log.unacknowledgedCount}</td>
+                    `;
+
+                    logsList.appendChild(tr);
+                });
+            }
+
+            // Export logs to CSV
+            function exportLogs() {
+                fetch('/api/operator-logs', {
+                    headers: {
+                        'x-auth-token': token
+                    }
+                })
+                .then(response => response.json())
+                .then(logs => {
+                    if (logs.length === 0) {
+                        alert('No logs to export');
+                        return;
+                    }
+
+                    // Sort logs by timestamp (newest first)
+                    logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+                    // Prepare CSV content
+                    let csvContent = "data:text/csv;charset=utf-8,";
+                    csvContent += "Operator,Username,Time of Logout,Unacknowledged Events\n";
+
+                    logs.forEach(log => {
+                        const timestamp = new Date(log.timestamp);
+                        const formattedDate = timestamp.toLocaleString();
+                        csvContent += `${log.name},${log.username},${formattedDate},${log.unacknowledgedCount}\n`;
+                    });
+
+                    // Create download link
+                    const encodedUri = encodeURI(csvContent);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", encodedUri);
+                    link.setAttribute("download", "operator_logs.csv");
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                })
+                .catch(error => {
+                    console.error('Error exporting logs:', error);
+                    alert('Failed to export logs: ' + error.message);
+                });
+            }
+
+            // Logout function
+            async function logout() {
+                try {
+                    // Call logout endpoint
+                    await fetch('/api/auth/logout', {
+                        method: 'POST',
+                        headers: {
+                            'x-auth-token': token
+                        }
+                    });
+
+                    // Clear local storage
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+
+                    // Redirect to login page
+                    window.location.href = '/login';
+                } catch (error) {
+                    console.error('Logout error:', error);
+
+                    // Even if the server-side logout fails, clear local storage and redirect
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    window.location.href = '/login';
+                }
+            }
+        });
+    </script>
+</body>
+</html>

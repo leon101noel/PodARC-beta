@@ -294,6 +294,20 @@
             .locked-indicator svg {
                 margin-right: 6px;
             }
+            
+        /* Operator logout confirmation styles */
+        .warning-content {
+            padding: 15px 0;
+        }
+        
+        #unacknowledged-count-text {
+            font-weight: bold;
+            color: #e74c3c;
+        }
+        
+        .confirm-modal-content {
+            max-width: 450px;
+        }
     </style>
 </head>
 <body>
@@ -486,6 +500,24 @@
                     <button type="submit" class="primary-button">Save Settings</button>
                 </div>
             </form>
+        </div>
+    </div>
+    
+    <!-- Operator Logout Confirmation Modal -->
+    <div id="logout-confirm-modal" class="modal">
+        <div class="modal-content confirm-modal-content">
+            <div class="modal-header">
+                <h2>Unacknowledged Events Warning</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="warning-content">
+                <p id="unacknowledged-warning-text">There are <span id="unacknowledged-count-text">0</span> unacknowledged events.</p>
+                <p>Are you sure you want to log out?</p>
+            </div>
+            <div class="form-buttons">
+                <button id="logout-cancel-btn" class="secondary-button">Cancel</button>
+                <button id="logout-confirm-btn" class="primary-button">Confirm Logout</button>
+            </div>
         </div>
     </div>
 

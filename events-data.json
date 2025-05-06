@@ -1923,10 +1923,18 @@
     "device": "POD2-TestCamera",
     "authenticated": true,
     "authenticatedUser": "cctv@cctv.com",
-    "acknowledged": false,
+    "acknowledged": true,
     "locked": false,
     "siteId": 2,
-    "videoPath": "/videos/2025/05/06/POD2-TestCamera_00_20250506074805.mp4"
+    "videoPath": "/videos/2025/05/06/POD2-TestCamera_00_20250506074805.mp4",
+    "acknowledgedAt": "2025-05-06T13:09:18.490Z",
+    "responseTimeMinutes": 380,
+    "acknowledgedBy": {
+      "userId": 4,
+      "username": "allied",
+      "name": "Allied Security"
+    },
+    "isLateResponse": true
   },
   {
     "id": 1746524500229,
@@ -1939,10 +1947,18 @@
     "device": "POD2-TestCamera",
     "authenticated": true,
     "authenticatedUser": "cctv@cctv.com",
-    "acknowledged": false,
+    "acknowledged": true,
     "locked": false,
     "siteId": 2,
-    "videoPath": "/videos/2025/05/06/POD2-TestCamera_00_20250506104122.mp4"
+    "videoPath": "/videos/2025/05/06/POD2-TestCamera_00_20250506104122.mp4",
+    "acknowledgedAt": "2025-05-06T13:06:32.147Z",
+    "responseTimeMinutes": 204,
+    "acknowledgedBy": {
+      "userId": 4,
+      "username": "allied",
+      "name": "Allied Security"
+    },
+    "isLateResponse": true
   },
   {
     "id": 1746524527704,
@@ -1955,9 +1971,17 @@
     "device": "POD2-TestCamera",
     "authenticated": true,
     "authenticatedUser": "cctv@cctv.com",
-    "acknowledged": false,
+    "acknowledged": true,
     "locked": false,
     "siteId": 2,
-    "videoPath": "/videos/2025/05/06/POD2-TestCamera_00_20250506104148.mp4"
+    "videoPath": "/videos/2025/05/06/POD2-TestCamera_00_20250506104148.mp4",
+    "acknowledgedAt": "2025-05-06T13:09:20.185Z",
+    "responseTimeMinutes": 207,
+    "acknowledgedBy": {
+      "userId": 4,
+      "username": "allied",
+      "name": "Allied Security"
+    },
+    "isLateResponse": true
   }
 ]
