@@ -10,6 +10,9 @@
     const unacknowledgedCounter = document.getElementById('unacknowledged-counter');
     const filterUnacknowledged = document.getElementById('filter-unacknowledged');
     const filterLateResponse = document.getElementById('filter-late-response');
+    const filterDateFrom = document.getElementById('filter-date-from');
+    const filterDateTo = document.getElementById('filter-date-to');
+    const clearDateFilterBtn = document.getElementById('clear-date-filter');
     const notificationSound = document.getElementById('notification-sound');
     const showShortcutsBtn = document.getElementById('show-shortcuts');
     const shortcutsPanel = document.getElementById('shortcuts-panel');
@@ -203,6 +206,45 @@
             filteredEvents = filteredEvents.filter(event => event.isLateResponse);
         }
 
+        // Apply date range filter if either date is set
+        if (filterDateFrom.value || filterDateTo.value) {
+            console.log('Filtering by date range:', filterDateFrom.value, 'to', filterDateTo.value);
+            
+            // If only 'from' date is set
+            if (filterDateFrom.value && !filterDateTo.value) {
+                const fromDate = new Date(filterDateFrom.value);
+                fromDate.setHours(0, 0, 0, 0); // Start of day
+                
+                filteredEvents = filteredEvents.filter(event => {
+                    const eventDate = new Date(event.date);
+                    return eventDate >= fromDate;
+                });
+            }
+            // If only 'to' date is set
+            else if (!filterDateFrom.value && filterDateTo.value) {
+                const toDate = new Date(filterDateTo.value);
+                toDate.setHours(23, 59, 59, 999); // End of day
+                
+                filteredEvents = filteredEvents.filter(event => {
+                    const eventDate = new Date(event.date);
+                    return eventDate <= toDate;
+                });
+            }
+            // If both dates are set
+            else if (filterDateFrom.value && filterDateTo.value) {
+                const fromDate = new Date(filterDateFrom.value);
+                fromDate.setHours(0, 0, 0, 0); // Start of day
+                
+                const toDate = new Date(filterDateTo.value);
+                toDate.setHours(23, 59, 59, 999); // End of day
+                
+                filteredEvents = filteredEvents.filter(event => {
+                    const eventDate = new Date(event.date);
+                    return eventDate >= fromDate && eventDate <= toDate;
+                });
+            }
+        }
+
         // Apply tag filter if selected
         if (filterTagDropdown && filterTagDropdown.value) {
             console.log('Filtering by tag:', filterTagDropdown.value);
@@ -228,6 +270,17 @@
 
             if (filterTagDropdown && filterTagDropdown.value) {
                 message += ` with tag '${filterTagDropdown.value}'`;
+            }
+            
+            // Add date range information to message if dates are set
+            if (filterDateFrom.value || filterDateTo.value) {
+                if (filterDateFrom.value && filterDateTo.value) {
+                    message += ` between ${new Date(filterDateFrom.value).toLocaleDateString()} and ${new Date(filterDateTo.value).toLocaleDateString()}`;
+                } else if (filterDateFrom.value) {
+                    message += ` from ${new Date(filterDateFrom.value).toLocaleDateString()} onwards`;
+                } else if (filterDateTo.value) {
+                    message += ` up to ${new Date(filterDateTo.value).toLocaleDateString()}`;
+                }
             }
 
             console.log('No events after filtering, showing message:', message);
@@ -1598,6 +1651,22 @@
             e.preventDefault();
             filterTagDropdown.focus();
         }
+        
+        // 'D' key to focus on date from filter
+        if (e.key === 'd' || e.key === 'D') {
+            e.preventDefault();
+            filterDateFrom.focus();
+        }
+        
+        // 'C' key to clear date filters
+        if (e.key === 'c' || e.key === 'C') {
+            e.preventDefault();
+            filterDateFrom.value = '';
+            filterDateTo.value = '';
+            filterDateFrom.max = '';
+            filterDateTo.min = '';
+            renderEventsList();
+        }
     });
 
     // Event listeners for the tag features
@@ -1638,6 +1707,47 @@
     // Event listeners for filters
     filterUnacknowledged.addEventListener('change', renderEventsList);
     filterLateResponse.addEventListener('change', renderEventsList);
+    
+    // Date filter event listeners
+    filterDateFrom.addEventListener('change', function() {
+        // When "from" date changes, update "to" date's min attribute
+        if (filterDateFrom.value) {
+            filterDateTo.min = filterDateFrom.value;
+        } else {
+            filterDateTo.min = ''; // Reset min constraint if from date is cleared
+        }
+        renderEventsList();
+    });
+    
+    filterDateTo.addEventListener('change', function() {
+        // When "to" date changes, update "from" date's max attribute
+        if (filterDateTo.value) {
+            filterDateFrom.max = filterDateTo.value;
+        } else {
+            filterDateFrom.max = ''; // Reset max constraint if to date is cleared
+        }
+        renderEventsList();
+    });
+    
+    // Clear date filter button
+    clearDateFilterBtn.addEventListener('click', function() {
+        filterDateFrom.value = '';
+        filterDateTo.value = '';
+        renderEventsList();
+    });
+    
+    // Initialize date filter controls
+    const today = new Date();
+    const formattedToday = today.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+    
+    // Set max date for "to" date picker (can't select future dates)
+    filterDateTo.max = formattedToday;
+    
+    // Restore date picker constraints if values are already set
+    if (filterDateFrom.value && filterDateTo.value) {
+        filterDateTo.min = filterDateFrom.value;
+        filterDateFrom.max = filterDateTo.value;
+    }
 
     // Handle click on the refresh button
     refreshBtn.addEventListener('click', checkForNewEvents);

@@ -153,6 +153,43 @@
             border-radius: 4px;
             border: 1px solid #ddd;
         }
+        
+        /* Date filter styles */
+        .date-filter-container {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .date-filter-label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            white-space: nowrap;
+            font-size: 14px;
+        }
+        
+        .date-filter-input {
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            min-width: 140px;
+        }
+        
+        .small-button {
+            padding: 3px 8px;
+            font-size: 12px;
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .small-button:hover {
+            background-color: #e0e0e0;
+        }
 
         /* Event note styles */
         .event-note {
@@ -292,6 +329,17 @@
                                 <input type="checkbox" id="filter-late-response">
                                 Show only late responses
                             </label>
+                            <div class="date-filter-container">
+                                <label class="date-filter-label">
+                                    From:
+                                    <input type="date" id="filter-date-from" class="date-filter-input">
+                                </label>
+                                <label class="date-filter-label">
+                                    To:
+                                    <input type="date" id="filter-date-to" class="date-filter-input">
+                                </label>
+                                <button id="clear-date-filter" class="small-button">Clear</button>
+                            </div>
                             <!-- Tag filter will be added here dynamically -->
                         </div>
                     </div>
@@ -333,6 +381,8 @@
                         <li><kbd>F</kbd> - Toggle unacknowledged filter</li>
                         <li><kbd>L</kbd> - Toggle late response filter</li>
                         <li><kbd>T</kbd> - Open tag filter dropdown</li>
+                        <li><kbd>D</kbd> - Focus on date from filter</li>
+                        <li><kbd>C</kbd> - Clear date filters</li>
                         <li><kbd>Esc</kbd> - Close panels/modals</li>
                     </ul>
                 </div>
