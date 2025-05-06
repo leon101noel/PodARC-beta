@@ -12,6 +12,7 @@
     const filterLateResponse = document.getElementById('filter-late-response');
     const filterDateFrom = document.getElementById('filter-date-from');
     const filterDateTo = document.getElementById('filter-date-to');
+    const filterSite = document.getElementById('filter-site');
     const clearDateFilterBtn = document.getElementById('clear-date-filter');
     const notificationSound = document.getElementById('notification-sound');
     const showShortcutsBtn = document.getElementById('show-shortcuts');
@@ -162,6 +163,41 @@
         // Wait for all site information to load
         await Promise.all(promises);
         console.log('Finished loading site information');
+        
+        // Populate site filter dropdown after loading site information
+        populateSiteFilterDropdown();
+    }
+    
+    // Function to populate the site filter dropdown with available sites
+    function populateSiteFilterDropdown() {
+        if (!filterSite) return;
+        
+        // Clear existing options except the first one (All sites)
+        while (filterSite.options.length > 1) {
+            filterSite.remove(1);
+        }
+        
+        // Get all site IDs from cache
+        const siteIds = Object.keys(siteInfoCache);
+        
+        if (siteIds.length === 0) {
+            console.log('No sites available for filter');
+            return;
+        }
+        
+        console.log('Populating site filter with', siteIds.length, 'sites');
+        
+        // Add options for each site, sorted by name
+        const siteOptions = siteIds
+            .map(id => ({ id, name: siteInfoCache[id].name }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+            
+        siteOptions.forEach(site => {
+            const option = document.createElement('option');
+            option.value = site.id;
+            option.textContent = site.name;
+            filterSite.appendChild(option);
+        });
     }
 
     // Update the unacknowledged counter and related UI elements
@@ -245,6 +281,13 @@
             }
         }
 
+        // Apply site filter if selected
+        if (filterSite && filterSite.value) {
+            const siteId = parseInt(filterSite.value);
+            console.log('Filtering by site ID:', siteId);
+            filteredEvents = filteredEvents.filter(event => event.siteId === siteId);
+        }
+        
         // Apply tag filter if selected
         if (filterTagDropdown && filterTagDropdown.value) {
             console.log('Filtering by tag:', filterTagDropdown.value);
@@ -281,6 +324,13 @@
                 } else if (filterDateTo.value) {
                     message += ` up to ${new Date(filterDateTo.value).toLocaleDateString()}`;
                 }
+            }
+            
+            // Add site filter information to message if site is selected
+            if (filterSite && filterSite.value) {
+                const siteId = parseInt(filterSite.value);
+                const siteName = siteInfoCache[siteId]?.name || 'Unknown Site';
+                message += ` for site '${siteName}'`;
             }
 
             console.log('No events after filtering, showing message:', message);
@@ -1724,6 +1774,12 @@
             filterDateFrom.focus();
         }
         
+        // 'S' key to focus on site filter dropdown
+        if (e.key === 's' || e.key === 'S') {
+            e.preventDefault();
+            filterSite.focus();
+        }
+        
         // 'C' key to clear date filters
         if (e.key === 'c' || e.key === 'C') {
             e.preventDefault();
@@ -1773,6 +1829,7 @@
     // Event listeners for filters
     filterUnacknowledged.addEventListener('change', renderEventsList);
     filterLateResponse.addEventListener('change', renderEventsList);
+    filterSite.addEventListener('change', renderEventsList);
     
     // Date filter event listeners
     filterDateFrom.addEventListener('change', function() {

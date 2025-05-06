@@ -137,17 +137,20 @@
         }
 
         /* Filter styles */
-        .tag-filter-container {
+        .tag-filter-container,
+        .site-filter-container {
             margin-top: 10px;
         }
 
-        .tag-filter-label {
+        .tag-filter-label,
+        .site-filter-label {
             font-size: 14px;
             margin-bottom: 5px;
             display: block;
         }
 
-        .tag-filter-dropdown {
+        .tag-filter-dropdown,
+        .filter-dropdown {
             width: 100%;
             padding: 5px;
             border-radius: 4px;
@@ -354,6 +357,15 @@
                                 </label>
                                 <button id="clear-date-filter" class="small-button">Clear</button>
                             </div>
+                            <div class="site-filter-container">
+                                <label class="site-filter-label">
+                                    Filter by site:
+                                    <select id="filter-site" class="filter-dropdown">
+                                        <option value="">All sites</option>
+                                        <!-- Site options will be populated dynamically -->
+                                    </select>
+                                </label>
+                            </div>
                             <!-- Tag filter will be added here dynamically -->
                         </div>
                     </div>
@@ -396,6 +408,7 @@
                         <li><kbd>L</kbd> - Toggle late response filter</li>
                         <li><kbd>T</kbd> - Open tag filter dropdown</li>
                         <li><kbd>D</kbd> - Focus on date from filter</li>
+                        <li><kbd>S</kbd> - Open site filter dropdown</li>
                         <li><kbd>C</kbd> - Clear date filters</li>
                         <li><kbd>Esc</kbd> - Close panels/modals</li>
                     </ul>
