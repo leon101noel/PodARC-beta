@@ -19,6 +19,9 @@ const retentionRoutes = require('./routes/retention');
 const EventRetentionService = require('./event-retention');
 // Add operator logs routes
 const operatorLogsRoutes = require('./routes/operator-logs');
+// Add audit logs routes and middleware
+const auditLogsRoutes = require('./routes/audit-logs');
+const auditLoggerMiddleware = require('./middleware/audit-logger');
 // Add cron for scheduled tasks
 const CronJob = require('cron').CronJob;
 
@@ -61,6 +64,10 @@ app.use(session({
 // Authentication middleware
 app.use(authMiddleware);
 
+// Add audit logger middleware (after auth middleware but before routes)
+// This needs to come AFTER authentication but BEFORE any routes
+app.use(auditLoggerMiddleware);
+
 // Add auth routes
 app.use('/api/auth', authRoutes);
 
@@ -75,6 +82,9 @@ app.use('/api/retention', retentionRoutes);
 
 // Add operator logs routes
 app.use('/api/operator-logs', operatorLogsRoutes);
+
+// Add audit logs routes
+app.use('/api/audit-logs', auditLogsRoutes);
 
 // Data file path
 const dataFilePath = path.join(__dirname, 'events-data.json');
@@ -208,6 +218,15 @@ function processEmails() {
 
 // Serve the login page
 app.get('/login', (req, res) => {
+    // If already authenticated, redirect to home
+    if (req.user) {
+        return res.redirect('/');
+    }
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+// Also handle /login.html for direct access
+app.get('/login.html', (req, res) => {
     // If already authenticated, redirect to home
     if (req.user) {
         return res.redirect('/');
@@ -417,6 +436,9 @@ app.post('/api/events/:id/acknowledge', (req, res) => {
         if (eventIndex === -1) {
             return res.status(404).json({ error: 'Event not found' });
         }
+        
+        // Store the previous state for audit log
+        const previousState = { ...events[eventIndex] };
 
         // Get the current time for acknowledgment timestamp
         const acknowledgedAt = new Date().toISOString();
@@ -468,6 +490,27 @@ app.post('/api/events/:id/acknowledge', (req, res) => {
         if (!success) {
             return res.status(500).json({ error: 'Failed to update event' });
         }
+
+        // Log the activity using the audit service
+        const { ACTIONS, logUserActivity } = require('./audit-service');
+        logUserActivity(
+            req,
+            ACTIONS.EVENT_ACKNOWLEDGE,
+            'events',
+            eventId,
+            {
+                previousState,
+                newState: events[eventIndex],
+                changes: {
+                    note,
+                    tags,
+                    locked,
+                    responseTimeMinutes,
+                    isLateResponse
+                }
+            },
+            true
+        );
 
         res.json({
             success: true,

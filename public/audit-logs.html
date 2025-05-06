@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Logs - CCTV Alert Monitor</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .logs-container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        /* Filter controls */
+        .logs-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            min-width: 200px;
+        }
+        
+        .filter-group label {
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        
+        .filter-group select,
+        .filter-group input {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        
+        .filter-buttons {
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
+        }
+        
+        /* Table styles */
+        .logs-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .logs-table th, .logs-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .logs-table th {
+            background-color: #f0f0f0;
+            position: sticky;
+            top: 0;
+        }
+        
+        .logs-table tbody tr:hover {
+            background-color: #f5f5f5;
+        }
+        
+        /* Success/failure indicators */
+        .success-true {
+            color: #2ecc71;
+        }
+        
+        .success-false {
+            color: #e74c3c;
+        }
+        
+        /* Pagination controls */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+            gap: 5px;
+        }
+        
+        .pagination button {
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            background-color: #fff;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        
+        .pagination button.active {
+            background-color: #3498db;
+            color: white;
+            border-color: #3498db;
+        }
+        
+        .pagination button:hover:not(.active) {
+            background-color: #f1f1f1;
+        }
+        
+        /* Details view */
+        .log-details {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .detail-row {
+            margin-bottom: 8px;
+        }
+        
+        .detail-label {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        /* Export button */
+        .export-btn {
+            background-color: #27ae60;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .export-btn:hover {
+            background-color: #219653;
+        }
+        
+        /* Loading and error states */
+        .loading, .error, .no-data {
+            padding: 20px;
+            text-align: center;
+            color: #666;
+        }
+        
+        .error {
+            color: #e74c3c;
+        }
+        
+        pre {
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            overflow: auto;
+            max-height: 300px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <h1>Audit Logs</h1>
+                <a href="/" class="back-link">Back to Monitoring</a>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link">Monitoring</a>
+                <a href="/statistics.html" class="nav-link">Statistics</a>
+                <a href="/users" class="nav-link">User Management</a>
+                <a href="/audit-logs.html" class="nav-link active">Audit Logs</a>
+            </div>
+            <div id="user-info-container" class="user-info-container">
+                <!-- User info will be populated dynamically -->
+            </div>
+        </header>
+
+        <main>
+            <div class="logs-container">
+                <div class="logs-filters">
+                    <div class="filter-group">
+                        <label for="filter-user">User</label>
+                        <select id="filter-user">
+                            <option value="">All Users</option>
+                            <!-- Users populated dynamically -->
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="filter-action">Action</label>
+                        <select id="filter-action">
+                            <option value="">All Actions</option>
+                            <!-- Actions populated dynamically -->
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="filter-date-from">From Date</label>
+                        <input type="date" id="filter-date-from">
+                    </div>
+                    <div class="filter-group">
+                        <label for="filter-date-to">To Date</label>
+                        <input type="date" id="filter-date-to">
+                    </div>
+                    <div class="filter-buttons">
+                        <button id="apply-filters" class="primary-button">Apply Filters</button>
+                        <button id="clear-filters" class="secondary-button">Clear Filters</button>
+                        <button id="export-csv" class="export-btn">Export CSV</button>
+                    </div>
+                </div>
+                
+                <div class="logs-content">
+                    <table class="logs-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>User</th>
+                                <th>Action</th>
+                                <th>Resource</th>
+                                <th>Status</th>
+                                <th>IP Address</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logs-tbody">
+                            <!-- Log entries populated dynamically -->
+                            <tr>
+                                <td colspan="7" class="loading">Loading audit logs...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <div id="log-details" class="log-details">
+                        <!-- Details populated when row is clicked -->
+                    </div>
+                    
+                    <div id="pagination" class="pagination">
+                        <!-- Pagination controls added dynamically -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if user is logged in and is admin
+            const token = localStorage.getItem('token');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            
+            if (!token || user.role !== 'admin') {
+                window.location.href = '/';
+                return;
+            }
+            
+            // Display current user
+            setupUserInfo(user);
+            
+            // DOM elements
+            const logsTable = document.getElementById('logs-tbody');
+            const filterUser = document.getElementById('filter-user');
+            const filterAction = document.getElementById('filter-action');
+            const filterDateFrom = document.getElementById('filter-date-from');
+            const filterDateTo = document.getElementById('filter-date-to');
+            const applyFiltersBtn = document.getElementById('apply-filters');
+            const clearFiltersBtn = document.getElementById('clear-filters');
+            const exportCsvBtn = document.getElementById('export-csv');
+            const logDetails = document.getElementById('log-details');
+            const pagination = document.getElementById('pagination');
+            
+            // Pagination state
+            let currentPage = 1;
+            let totalPages = 1;
+            const PAGE_SIZE = 50;
+            
+            // Load initial data
+            fetchAuditLogs();
+            fetchUsers();
+            populateActions();
+            
+            // Event listeners
+            applyFiltersBtn.addEventListener('click', function() {
+                currentPage = 1;
+                fetchAuditLogs();
+            });
+            
+            clearFiltersBtn.addEventListener('click', function() {
+                filterUser.value = '';
+                filterAction.value = '';
+                filterDateFrom.value = '';
+                filterDateTo.value = '';
+                currentPage = 1;
+                fetchAuditLogs();
+            });
+            
+            exportCsvBtn.addEventListener('click', exportLogs);
+            
+            // Fetch audit logs with filters
+            async function fetchAuditLogs() {
+                try {
+                    logsTable.innerHTML = '<tr><td colspan="7" class="loading">Loading audit logs...</td></tr>';
+                    
+                    // Build query string with filters
+                    const params = new URLSearchParams();
+                    params.append('page', currentPage);
+                    params.append('limit', PAGE_SIZE);
+                    
+                    if (filterUser.value) params.append('userId', filterUser.value);
+                    if (filterAction.value) params.append('action', filterAction.value);
+                    if (filterDateFrom.value) params.append('from', filterDateFrom.value);
+                    if (filterDateTo.value) params.append('to', filterDateTo.value);
+                    
+                    // Fetch logs
+                    const response = await fetch(`/api/audit-logs?${params.toString()}`, {
+                        headers: {
+                            'x-auth-token': token
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`API error: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    // Update pagination state
+                    totalPages = data.totalPages;
+                    
+                    // Render logs
+                    renderLogs(data.logs);
+                    renderPagination();
+                    
+                } catch (error) {
+                    console.error('Error fetching audit logs:', error);
+                    logsTable.innerHTML = `<tr><td colspan="7" class="error">Failed to load audit logs: ${error.message}</td></tr>`;
+                }
+            }
+            
+            // Render logs in table
+            function renderLogs(logs) {
+                if (logs.length === 0) {
+                    logsTable.innerHTML = '<tr><td colspan="7" class="no-data">No audit logs match your filters</td></tr>';
+                    return;
+                }
+                
+                let html = '';
+                
+                logs.forEach(log => {
+                    const date = new Date(log.timestamp);
+                    const formattedDate = date.toLocaleString();
+                    
+                    html += `
+                        <tr data-id="${log.id}" class="log-row">
+                            <td>${formattedDate}</td>
+                            <td>${log.username} (${log.userRole})</td>
+                            <td>${formatAction(log.action)}</td>
+                            <td>${log.resource}${log.resourceId ? ` #${log.resourceId}` : ''}</td>
+                            <td class="success-${log.success}">${log.success ? 'Success' : 'Failed'}</td>
+                            <td>${log.ipAddress}</td>
+                            <td>
+                                <button class="view-details-btn small-button">View Details</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                logsTable.innerHTML = html;
+                
+                // Add click handlers for details buttons
+                document.querySelectorAll('.view-details-btn').forEach(btn => {
+                    btn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        const row = this.closest('.log-row');
+                        const logId = row.getAttribute('data-id');
+                        showLogDetails(logs.find(log => log.id === logId));
+                    });
+                });
+            }
+            
+            // Show detailed information for a log entry
+            function showLogDetails(log) {
+                const date = new Date(log.timestamp);
+                const formattedDate = date.toLocaleString();
+                
+                let detailsHtml = `
+                    <h3>Log Details</h3>
+                    <div class="detail-row">
+                        <span class="detail-label">Time:</span>
+                        <span>${formattedDate}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">User:</span>
+                        <span>${log.username} (${log.userRole})</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Action:</span>
+                        <span>${formatAction(log.action)}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Resource:</span>
+                        <span>${log.resource}${log.resourceId ? ` #${log.resourceId}` : ''}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Status:</span>
+                        <span class="success-${log.success}">${log.success ? 'Success' : 'Failed'}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">IP Address:</span>
+                        <span>${log.ipAddress}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">User Agent:</span>
+                        <span>${log.userAgent}</span>
+                    </div>
+                `;
+                
+                // Add details object if it exists
+                if (log.details && Object.keys(log.details).length > 0) {
+                    detailsHtml += `
+                        <div class="detail-row">
+                            <span class="detail-label">Details:</span>
+                            <pre>${JSON.stringify(log.details, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+                
+                logDetails.innerHTML = detailsHtml;
+                logDetails.style.display = 'block';
+                
+                // Scroll to details
+                logDetails.scrollIntoView({ behavior: 'smooth' });
+            }
+            
+            // Render pagination controls
+            function renderPagination() {
+                if (totalPages <= 1) {
+                    pagination.innerHTML = '';
+                    return;
+                }
+                
+                let paginationHtml = '';
+                
+                // Previous button
+                paginationHtml += `
+                    <button ${currentPage === 1 ? 'disabled' : ''} class="pagination-prev">
+                        &laquo; Previous
+                    </button>
+                `;
+                
+                // Page buttons
+                const startPage = Math.max(1, currentPage - 2);
+                const endPage = Math.min(totalPages, startPage + 4);
+                
+                for (let i = startPage; i <= endPage; i++) {
+                    paginationHtml += `
+                        <button class="page-number ${i === currentPage ? 'active' : ''}" data-page="${i}">
+                            ${i}
+                        </button>
+                    `;
+                }
+                
+                // Next button
+                paginationHtml += `
+                    <button ${currentPage === totalPages ? 'disabled' : ''} class="pagination-next">
+                        Next &raquo;
+                    </button>
+                `;
+                
+                pagination.innerHTML = paginationHtml;
+                
+                // Add event listeners
+                document.querySelectorAll('.page-number').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        currentPage = parseInt(this.getAttribute('data-page'));
+                        fetchAuditLogs();
+                    });
+                });
+                
+                const prevBtn = document.querySelector('.pagination-prev');
+                if (prevBtn) {
+                    prevBtn.addEventListener('click', function() {
+                        if (currentPage > 1) {
+                            currentPage--;
+                            fetchAuditLogs();
+                        }
+                    });
+                }
+                
+                const nextBtn = document.querySelector('.pagination-next');
+                if (nextBtn) {
+                    nextBtn.addEventListener('click', function() {
+                        if (currentPage < totalPages) {
+                            currentPage++;
+                            fetchAuditLogs();
+                        }
+                    });
+                }
+            }
+            
+            // Fetch users for filter dropdown
+            async function fetchUsers() {
+                try {
+                    const response = await fetch('/api/auth/users', {
+                        headers: {
+                            'x-auth-token': token
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`API error: ${response.status}`);
+                    }
+                    
+                    const users = await response.json();
+                    
+                    // Populate user dropdown
+                    let userOptions = '<option value="">All Users</option>';
+                    
+                    users.forEach(user => {
+                        userOptions += `<option value="${user.id}">${user.name} (${user.username})</option>`;
+                    });
+                    
+                    filterUser.innerHTML = userOptions;
+                    
+                } catch (error) {
+                    console.error('Error fetching users:', error);
+                    filterUser.innerHTML = '<option value="">Error loading users</option>';
+                }
+            }
+            
+            // Populate action types in dropdown
+            function populateActions() {
+                const actions = [
+                    { value: 'LOGIN_SUCCESS', label: 'Login Success' },
+                    { value: 'LOGIN_FAILURE', label: 'Login Failure' },
+                    { value: 'LOGOUT', label: 'Logout' },
+                    { value: 'EVENT_VIEW', label: 'View Event' },
+                    { value: 'EVENT_ACKNOWLEDGE', label: 'Acknowledge Event' },
+                    { value: 'EVENT_LOCK', label: 'Lock Event' },
+                    { value: 'EVENT_UNLOCK', label: 'Unlock Event' },
+                    { value: 'USER_CREATE', label: 'Create User' },
+                    { value: 'USER_UPDATE', label: 'Update User' },
+                    { value: 'USER_DELETE', label: 'Delete User' },
+                    { value: 'SETTINGS_CHANGE', label: 'Change Settings' },
+                    { value: 'DATA_EXPORT', label: 'Export Data' },
+                    { value: 'API_REQUEST', label: 'API Request' }
+                ];
+                
+                let actionOptions = '<option value="">All Actions</option>';
+                
+                actions.forEach(action => {
+                    actionOptions += `<option value="${action.value}">${action.label}</option>`;
+                });
+                
+                filterAction.innerHTML = actionOptions;
+            }
+            
+            // Format action types for display
+            function formatAction(action) {
+                return action.replace(/_/g, ' ')
+                    .split(' ')
+                    .map(word => word.charAt(0) + word.slice(1).toLowerCase())
+                    .join(' ');
+            }
+            
+            // Export logs as CSV
+            function exportLogs() {
+                // Build query string with current filters
+                const params = new URLSearchParams();
+                
+                if (filterUser.value) params.append('userId', filterUser.value);
+                if (filterAction.value) params.append('action', filterAction.value);
+                if (filterDateFrom.value) params.append('from', filterDateFrom.value);
+                if (filterDateTo.value) params.append('to', filterDateTo.value);
+                
+                // Create download URL
+                const downloadUrl = `/api/audit-logs/export?${params.toString()}`;
+                
+                // Create temp link and trigger download
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.setAttribute('download', 'audit_logs.csv');
+                link.setAttribute('target', '_blank');
+                
+                // Add auth token header
+                fetch(downloadUrl, {
+                    headers: {
+                        'x-auth-token': token
+                    }
+                })
+                .then(response => response.blob())
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    link.href = url;
+                    link.click();
+                    window.URL.revokeObjectURL(url);
+                })
+                .catch(error => {
+                    console.error('Error exporting logs:', error);
+                    alert('Failed to export logs: ' + error.message);
+                });
+            }
+            
+            // Setup user info display
+            function setupUserInfo(user) {
+                const userInfoContainer = document.getElementById('user-info-container');
+                if (!userInfoContainer) return;
+                
+                userInfoContainer.innerHTML = `
+                    <span class="current-user">Logged in as: ${user.name || 'Unknown'}</span>
+                    <div class="user-actions">
+                        <a href="/users" class="admin-link">User Management</a>
+                        <a href="/settings" class="admin-link">Settings</a>
+                        <a href="/sites.html" class="admin-link">Sites</a>
+                        <a href="/retention.html" class="admin-link">Retention</a>
+                        <a href="/operator-logs.html" class="admin-link">Operator Logs</a>
+                        <button id="logout-btn" class="logout-btn">Logout</button>
+                    </div>
+                `;
+                
+                // Add logout functionality
+                document.getElementById('logout-btn').addEventListener('click', async function() {
+                    try {
+                        // Call logout endpoint
+                        await fetch('/api/auth/logout', {
+                            method: 'POST',
+                            headers: {
+                                'x-auth-token': token
+                            }
+                        });
+                        
+                        // Clear local storage
+                        localStorage.removeItem('token');
+                        localStorage.removeItem('user');
+                        
+                        // Use setTimeout to ensure the redirect happens after storage is cleared
+                        setTimeout(() => {
+                            window.location.href = '/login.html';
+                        }, 100);
+                    } catch (error) {
+                        console.error('Logout error:', error);
+                        // Even if the server-side logout fails, clear local storage and redirect
+                        localStorage.removeItem('token');
+                        localStorage.removeItem('user');
+                        setTimeout(() => {
+                            window.location.href = '/login.html';
+                        }, 100);
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

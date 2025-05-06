@@ -1,0 +1,228 @@
+[
+  {
+    "id": "e80ad184-7390-4c6e-ac53-368c1331a7ee",
+    "timestamp": "2025-05-06T16:24:47.618Z",
+    "userId": 1,
+    "username": "admin",
+    "userRole": "admin",
+    "action": "EVENT_LOCK",
+    "resource": "events",
+    "resourceId": "1746524527704",
+    "details": {
+      "previousState": {
+        "locked": false
+      },
+      "newState": {
+        "locked": true
+      },
+      "event": {
+        "id": 1746524527704,
+        "subject": "Person Detected from POD2-TestCamera at 2025/5/6 10:41:54",
+        "camera": "POD2-TestCamera",
+        "date": "2025-05-06T09:42:07.700Z"
+      }
+    },
+    "ipAddress": "::ffff:127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:138.0) Gecko/20100101 Firefox/138.0",
+    "success": true,
+    "metadata": {}
+  },
+  {
+    "id": "7e74d5c6-f271-413a-912d-ea05ea571880",
+    "timestamp": "2025-05-06T16:24:48.683Z",
+    "userId": 1,
+    "username": "admin",
+    "userRole": "admin",
+    "action": "EVENT_UNLOCK",
+    "resource": "events",
+    "resourceId": "1746524527704",
+    "details": {
+      "previousState": {
+        "locked": true
+      },
+      "newState": {
+        "locked": false
+      },
+      "event": {
+        "id": 1746524527704,
+        "subject": "Person Detected from POD2-TestCamera at 2025/5/6 10:41:54",
+        "camera": "POD2-TestCamera",
+        "date": "2025-05-06T09:42:07.700Z"
+      }
+    },
+    "ipAddress": "::ffff:127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:138.0) Gecko/20100101 Firefox/138.0",
+    "success": true,
+    "metadata": {}
+  },
+  {
+    "id": "38acd33a-d602-4b7a-8f8c-3d9a44d82982",
+    "timestamp": "2025-05-06T16:25:12.298Z",
+    "userId": 1,
+    "username": "admin",
+    "userRole": "admin",
+    "action": "USER_CREATE",
+    "resource": "users",
+    "resourceId": "5",
+    "details": {
+      "user": {
+        "id": 5,
+        "username": "test",
+        "name": "test",
+        "role": "user",
+        "isActive": false
+      }
+    },
+    "ipAddress": "::ffff:127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:138.0) Gecko/20100101 Firefox/138.0",
+    "success": true,
+    "metadata": {}
+  },
+  {
+    "id": "b19977b4-2b60-4fbf-a957-92b803b35bfc",
+    "timestamp": "2025-05-06T16:25:23.056Z",
+    "userId": 1,
+    "username": "admin",
+    "userRole": "admin",
+    "action": "USER_UPDATE",
+    "resource": "users",
+    "resourceId": "5",
+    "details": {
+      "previousState": {
+        "id": 5,
+        "username": "test",
+        "name": "test",
+        "role": "user",
+        "isActive": false
+      },
+      "newState": {
+        "id": 5,
+        "username": "test",
+        "name": "test",
+        "role": "user",
+        "isActive": true
+      },
+      "changes": {
+        "username": "test",
+        "name": "test",
+        "role": "user",
+        "isActive": true,
+        "passwordChanged": false
+      }
+    },
+    "ipAddress": "::ffff:127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:138.0) Gecko/20100101 Firefox/138.0",
+    "success": true,
+    "metadata": {}
+  },
+  {
+    "id": "db742139-0f61-4e1e-a619-9f2e93aae67d",
+    "timestamp": "2025-05-06T16:25:35.828Z",
+    "userId": 1,
+    "username": "admin",
+    "userRole": "admin",
+    "action": "USER_DELETE",
+    "resource": "users",
+    "resourceId": "5",
+    "details": {
+      "deletedUser": {
+        "id": 5,
+        "username": "test",
+        "name": "test",
+        "role": "user",
+        "isActive": true
+      }
+    },
+    "ipAddress": "::ffff:127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:138.0) Gecko/20100101 Firefox/138.0",
+    "success": true,
+    "metadata": {}
+  },
+  {
+    "id": "5321d72f-e475-4a87-bfa9-ced32d640ff1",
+    "timestamp": "2025-05-06T16:25:46.133Z",
+    "userId": 1,
+    "username": "admin",
+    "userRole": "admin",
+    "action": "EVENT_ACKNOWLEDGE",
+    "resource": "events",
+    "resourceId": "1746347251229",
+    "details": {
+      "previousState": {
+        "id": 1746347251229,
+        "messageId": "generated-1746347251228",
+        "date": "2025-05-04T08:27:31.228Z",
+        "subject": "Vehicle Detected from POD2-TestCamera at 2025/5/4 09:27:21",
+        "imagePath": "/images/1746347251228_01_20250504092721000.jpg",
+        "camera": "POD2-TestCamera",
+        "eventType": "Vehicle Detected",
+        "device": "POD2-TestCamera",
+        "authenticated": true,
+        "authenticatedUser": "cctv@cctv.com",
+        "acknowledged": false,
+        "locked": false,
+        "siteId": 2,
+        "videoPath": "/videos/2025/05/04/POD2-TestCamera_00_20250504092721.mp4"
+      },
+      "newState": {
+        "id": 1746347251229,
+        "messageId": "generated-1746347251228",
+        "date": "2025-05-04T08:27:31.228Z",
+        "subject": "Vehicle Detected from POD2-TestCamera at 2025/5/4 09:27:21",
+        "imagePath": "/images/1746347251228_01_20250504092721000.jpg",
+        "camera": "POD2-TestCamera",
+        "eventType": "Vehicle Detected",
+        "device": "POD2-TestCamera",
+        "authenticated": true,
+        "authenticatedUser": "cctv@cctv.com",
+        "acknowledged": true,
+        "locked": false,
+        "siteId": 2,
+        "videoPath": "/videos/2025/05/04/POD2-TestCamera_00_20250504092721.mp4",
+        "acknowledgedAt": "2025-05-06T16:25:46.131Z",
+        "responseTimeMinutes": 3358,
+        "acknowledgedBy": {
+          "userId": 1,
+          "username": "admin",
+          "name": "Administrator"
+        },
+        "isLateResponse": true
+      },
+      "changes": {
+        "note": "",
+        "tags": [],
+        "locked": false,
+        "responseTimeMinutes": 3358,
+        "isLateResponse": true
+      }
+    },
+    "ipAddress": "::ffff:127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:138.0) Gecko/20100101 Firefox/138.0",
+    "success": true,
+    "metadata": {}
+  },
+  {
+    "id": "06052edf-6495-45e0-be72-db93b42d03c8",
+    "timestamp": "2025-05-06T16:25:46.135Z",
+    "userId": 1,
+    "username": "admin",
+    "userRole": "admin",
+    "action": "EVENT_ACKNOWLEDGE",
+    "resource": "events",
+    "resourceId": "1746347251229",
+    "details": {
+      "method": "POST",
+      "path": "/api/events/1746347251229/acknowledge",
+      "query": {},
+      "body": {
+        "note": "",
+        "tags": [],
+        "locked": false
+      }
+    },
+    "ipAddress": "::ffff:127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:138.0) Gecko/20100101 Firefox/138.0",
+    "success": true,
+    "metadata": {}
+  }
+]

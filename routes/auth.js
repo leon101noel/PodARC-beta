@@ -24,12 +24,48 @@ router.post('/login', async (req, res) => {
 
         // Check if user exists
         if (!user) {
+            // Log failed login attempt
+            const { ACTIONS, logUserActivity } = require('../audit-service');
+            logUserActivity(
+                { 
+                    headers: req.headers,
+                    connection: req.connection,
+                    user: null 
+                },
+                ACTIONS.LOGIN_FAILURE,
+                'auth',
+                username,
+                { 
+                    reason: 'Invalid username or inactive account',
+                    attemptedUsername: username 
+                },
+                false
+            );
+            
             return res.status(400).json({ error: 'Invalid credentials or inactive account' });
         }
 
         // Check if password matches
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
+            // Log failed login attempt
+            const { ACTIONS, logUserActivity } = require('../audit-service');
+            logUserActivity(
+                { 
+                    headers: req.headers,
+                    connection: req.connection,
+                    user: null 
+                },
+                ACTIONS.LOGIN_FAILURE,
+                'auth',
+                username,
+                { 
+                    reason: 'Invalid password',
+                    attemptedUsername: username 
+                },
+                false
+            );
+            
             return res.status(400).json({ error: 'Invalid credentials' });
         }
 
@@ -55,6 +91,30 @@ router.post('/login', async (req, res) => {
             };
         }
 
+        // Log successful login directly
+        const { ACTIONS, logUserActivity } = require('../audit-service');
+        logUserActivity(
+            { 
+                headers: req.headers,
+                connection: req.connection,
+                user: {
+                    id: user.id,
+                    username: user.username,
+                    name: user.name,
+                    role: user.role
+                } 
+            },
+            ACTIONS.LOGIN_SUCCESS,
+            'auth',
+            user.username,
+            { 
+                userId: user.id,
+                username: user.username,
+                role: user.role
+            },
+            true
+        );
+
         // Return token and user info
         res.json({
             success: true,
@@ -76,6 +136,23 @@ router.post('/login', async (req, res) => {
 // @desc    Logout user
 // @access  Private
 router.post('/logout', (req, res) => {
+    // Log logout event before destroying session
+    if (req.user) {
+        const { ACTIONS, logUserActivity } = require('../audit-service');
+        logUserActivity(
+            req,
+            ACTIONS.LOGOUT,
+            'auth',
+            req.user.username,
+            { 
+                userId: req.user.id,
+                username: req.user.username,
+                role: req.user.role
+            },
+            true
+        );
+    }
+    
     if (req.session) {
         req.session.destroy(err => {
             if (err) {
@@ -163,6 +240,27 @@ router.post('/users', adminMiddleware, async (req, res) => {
         if (!writeUsersData(users)) {
             return res.status(500).json({ error: 'Failed to save user' });
         }
+        
+        // Log user creation in audit log
+        try {
+            const { ACTIONS, logUserActivity } = require('../audit-service');
+            const userWithoutPassword = { ...newUser };
+            delete userWithoutPassword.password;
+            
+            logUserActivity(
+                req,
+                ACTIONS.USER_CREATE,
+                'users',
+                userWithoutPassword.id,
+                {
+                    user: userWithoutPassword
+                },
+                true
+            );
+        } catch (error) {
+            console.error('Error logging user creation:', error);
+            // Continue even if logging fails
+        }
 
         // Return user without password
         const { password: _, ...userWithoutPassword } = newUser;
@@ -190,6 +288,10 @@ router.put('/users/:id', adminMiddleware, async (req, res) => {
         if (userIndex === -1) {
             return res.status(404).json({ error: 'User not found' });
         }
+        
+        // Store original user state for audit log
+        const originalUser = { ...users[userIndex] };
+        delete originalUser.password; // Don't include password in logs
 
         // Update user
         if (username) users[userIndex].username = username;
@@ -206,6 +308,36 @@ router.put('/users/:id', adminMiddleware, async (req, res) => {
         // Save updated users
         if (!writeUsersData(users)) {
             return res.status(500).json({ error: 'Failed to update user' });
+        }
+        
+        // Create updated user object for audit log (without password)
+        const updatedUser = { ...users[userIndex] };
+        delete updatedUser.password;
+        
+        // Log user update in audit log
+        try {
+            const { ACTIONS, logUserActivity } = require('../audit-service');
+            logUserActivity(
+                req, 
+                ACTIONS.USER_UPDATE,
+                'users',
+                userId,
+                {
+                    previousState: originalUser,
+                    newState: updatedUser,
+                    changes: {
+                        username: username || undefined,
+                        name: name || undefined,
+                        role: role || undefined,
+                        isActive: isActive,
+                        passwordChanged: !!password
+                    }
+                },
+                true
+            );
+        } catch (error) {
+            console.error('Error logging user update:', error);
+            // Continue even if logging fails
         }
 
         // Return updated user without password
@@ -238,6 +370,10 @@ router.delete('/users/:id', adminMiddleware, (req, res) => {
         if (userIndex === -1) {
             return res.status(404).json({ error: 'User not found' });
         }
+        
+        // Store user info for audit log before deleting
+        const deletedUser = { ...users[userIndex] };
+        delete deletedUser.password; // Don't include password in logs
 
         // Remove user
         users.splice(userIndex, 1);
@@ -245,6 +381,24 @@ router.delete('/users/:id', adminMiddleware, (req, res) => {
         // Save updated users
         if (!writeUsersData(users)) {
             return res.status(500).json({ error: 'Failed to delete user' });
+        }
+        
+        // Log user deletion in audit log
+        try {
+            const { ACTIONS, logUserActivity } = require('../audit-service');
+            logUserActivity(
+                req,
+                ACTIONS.USER_DELETE,
+                'users',
+                userId,
+                {
+                    deletedUser
+                },
+                true
+            );
+        } catch (error) {
+            console.error('Error logging user deletion:', error);
+            // Continue even if logging fails
         }
 
         res.json({ success: true, message: 'User deleted successfully' });

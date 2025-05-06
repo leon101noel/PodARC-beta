@@ -37,17 +37,31 @@ function authMiddleware(req, res, next) {
 
     // Check if no token
     if (!token) {
-        if (req.path === '/login' || req.path === '/api/auth/login' || req.path.startsWith('/public/') ||
-            req.path === '/styles.css' || req.path === '/login-styles.css' || req.path === '/app.js' ||
-            req.path === '/user-management-styles.css') {
+        // These paths are allowed without authentication
+        const publicPaths = [
+            '/login', 
+            '/login.html',
+            '/api/auth/login',
+            '/styles.css',
+            '/login-styles.css',
+            '/app.js',
+            '/user-management-styles.css',
+            '/favicon.ico'
+        ];
+        
+        if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || 
+            req.path.startsWith('/images/')) {
             return next();
         }
+        
         // If it's an API request, return 401
         if (req.path.startsWith('/api/')) {
             return res.status(401).json({ error: 'No token, authorization denied' });
         }
+        
         // For regular page requests, redirect to login
-        return res.redirect('/login');
+        console.log('Redirecting unauthenticated request to /login.html:', req.path);
+        return res.redirect('/login.html');
     }
 
     try {

@@ -20,7 +20,7 @@
     "username": "tom",
     "password": "$2a$10$c0kYj5Vq7PPbpYms4I4xWOl8n2oOnj2n/CUenJu5amBjBl678cDGG",
     "name": "Tom Howard",
-    "role": "user",
+    "role": "operator",
     "isActive": true
   },
   {

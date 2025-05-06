@@ -370,10 +370,44 @@ router.put('/events/:id/lock', authMiddleware, (req, res) => {
             return res.status(400).json({ error: 'Locked status is required' });
         }
 
+        // Get previous state for audit logging
+        const events = retentionService.readEventsData();
+        const previousEvent = events.find(e => e.id === eventId);
+        
+        if (!previousEvent) {
+            return res.status(404).json({ error: 'Event not found' });
+        }
+        
+        // Remember previous lock state
+        const previousLockState = previousEvent.locked;
+
         const result = retentionService.toggleEventLock(eventId, locked);
 
         if (!result.success) {
             return res.status(404).json({ error: result.error });
+        }
+        
+        // Only log if the state actually changed
+        if (previousLockState !== locked) {
+            // Log the action in the audit log
+            const { ACTIONS, logUserActivity } = require('../audit-service');
+            logUserActivity(
+                req,
+                locked ? ACTIONS.EVENT_LOCK : ACTIONS.EVENT_UNLOCK,
+                'events',
+                eventId,
+                {
+                    previousState: { locked: previousLockState },
+                    newState: { locked },
+                    event: {
+                        id: eventId,
+                        subject: previousEvent.subject,
+                        camera: previousEvent.camera,
+                        date: previousEvent.date
+                    }
+                },
+                true
+            );
         }
 
         res.json(result);

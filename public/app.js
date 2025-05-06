@@ -1581,6 +1581,7 @@
                 ${user.role === 'admin' ? '<a href="/sites.html" class="admin-link">Sites</a>' : ''}
                 ${user.role === 'admin' ? '<a href="/retention.html" class="admin-link">Retention</a>' : ''}
                 ${user.role === 'admin' ? '<a href="/operator-logs.html" class="admin-link">Operator Logs</a>' : ''}
+                ${user.role === 'admin' ? '<a href="/audit-logs.html" class="admin-link">Audit Logs</a>' : ''}
                 <button id="logout-btn" class="logout-btn">Logout</button>
             </div>
         `;
@@ -1656,27 +1657,36 @@
         async function performLogout() {
             try {
                 // Call logout endpoint
-                await fetch('/api/auth/logout', {
+                const response = await fetch('/api/auth/logout', {
                     method: 'POST',
                     headers: {
                         'x-auth-token': token
                     }
                 });
 
-                // Clear local storage
+                // Clear local storage immediately
                 localStorage.removeItem('token');
                 localStorage.removeItem('user');
 
                 console.log('Logged out successfully, redirecting to login');
-                // Redirect to login page
-                window.location.href = '/login';
+                
+                // Use setTimeout to ensure the redirect happens after storage is cleared
+                // This gives time for any async operations to complete
+                setTimeout(() => {
+                    // Redirect to login page using full path
+                    window.location.href = '/login.html';
+                }, 100);
             } catch (error) {
                 console.error('Logout error:', error);
 
                 // Even if the server-side logout fails, clear local storage and redirect
                 localStorage.removeItem('token');
                 localStorage.removeItem('user');
-                window.location.href = '/login';
+                
+                // Use setTimeout for the same reason as above
+                setTimeout(() => {
+                    window.location.href = '/login.html';
+                }, 100);
             }
         }
     }
